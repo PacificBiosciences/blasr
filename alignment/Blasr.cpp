@@ -12,68 +12,67 @@
 #include "MappingIPC.h"
 #include "MappingSemaphores.h"
 
-#include "CCSSequence.h"
-#include "SMRTSequence.h"
-#include "FASTASequence.h"
-#include "FASTAReader.h"
-#include "SeqUtils.h"
+#include "CCSSequence.hpp"
+#include "SMRTSequence.hpp"
+#include "FASTASequence.hpp"
+#include "FASTAReader.hpp"
+#include "SeqUtils.hpp"
 #include "defs.h"
 #include "utils.h"
 
-#include "tuples/DNATuple.h"
-#include "tuples/HashedTupleList.h"
-#include "algorithms/compare/CompareStrings.h"
-#include "algorithms/alignment.h"
-#include "algorithms/alignment/AffineKBandAlign.h"
-#include "algorithms/alignment/GuidedAlign.h"
-#include "algorithms/alignment/AffineGuidedAlign.h"
-#include "algorithms/alignment/FullQVAlign.h"
-#include "algorithms/alignment/ExtendAlign.h"
-#include "algorithms/alignment/OneGapAlignment.h"
-#include "algorithms/alignment/AlignmentUtils.h"
-#include "algorithms/alignment/QualityValueScoreFunction.h"
-#include "algorithms/alignment/IDSScoreFunction.h"
-#include "algorithms/alignment/DistanceMatrixScoreFunction.h"
-#include "algorithms/alignment/StringToScoreMatrix.h"
-#include "algorithms/alignment/AlignmentFormats.h"
-#include "algorithms/anchoring/LISPValue.h"
-#include "algorithms/anchoring/LISPValueWeightor.h"
-#include "algorithms/anchoring/LISSizeWeightor.h"
-#include "algorithms/anchoring/LISQValueWeightor.h"
-#include "algorithms/anchoring/FindMaxInterval.h"
-#include "algorithms/anchoring/MapBySuffixArray.h"
-#include "datastructures/anchoring/ClusterList.h"
-#include "algorithms/anchoring/ClusterProbability.h"
-#include "algorithms/anchoring/BWTSearch.h"
-#include "datastructures/metagenome/SequenceIndexDatabase.h"
-#include "datastructures/metagenome/TitleTable.h"
-#include "datastructures/suffixarray/SharedSuffixArray.h"
-#include "datastructures/suffixarray/SuffixArrayTypes.h"
-#include "datastructures/tuplelists/TupleCountTable.h" 
-#include "datastructures/anchoring/WeightedInterval.h"
-#include "datastructures/anchoring/AnchorParameters.h"
-#include "datastructures/alignment/AlignmentCandidate.h"
-#include "datastructures/alignment/AlignmentBlock.h"
-#include "datastructures/alignment/AlignmentContext.h"
-#include "datastructures/mapping/MappingMetrics.h"
-#include "datastructures/reads/ReadInterval.h"
-#include "utils/FileOfFileNames.h"
-#include "utils/RegionUtils.h"
-#include "utils/TimeUtils.h"
-#include "qvs/QualityTransform.h"
-#include "files/ReaderAgglomerate.h"
-#include "files/CCSIterator.h"
-#include "files/FragmentCCSIterator.h"
-#include "data/hdf/HDFRegionTableReader.h"
-#include "datastructures/bwt/BWT.h"
-#include "datastructures/sequence/PackedDNASequence.h"
-#include "CommandLineParser.h"
-#include "qvs/QualityValue.h"
-#include "statistics/VarianceAccumulator.h"
-#include "statistics/pdfs.h"
-#include "statistics/cdfs.h"
-#include "statistics/statutils.h"
-#include "statistics/LookupAnchorDistribution.h"
+#include "tuples/DNATuple.hpp"
+#include "tuples/HashedTupleList.h" // partial port
+#include "algorithms/compare/CompareStrings.hpp"
+#include "algorithms/alignment/AffineKBandAlign.hpp"
+#include "algorithms/alignment/GuidedAlign.hpp"
+#include "algorithms/alignment/AffineGuidedAlign.hpp"
+#include "algorithms/alignment/FullQVAlign.hpp"
+#include "algorithms/alignment/ExtendAlign.hpp"
+#include "algorithms/alignment/OneGapAlignment.hpp"
+#include "algorithms/alignment/AlignmentUtils.hpp"
+#include "algorithms/alignment/QualityValueScoreFunction.h" // not ported
+#include "algorithms/alignment/IDSScoreFunction.hpp"
+#include "algorithms/alignment/DistanceMatrixScoreFunction.hpp"
+#include "algorithms/alignment/StringToScoreMatrix.h" // not ported
+#include "algorithms/alignment/AlignmentFormats.h" // not ported
+#include "algorithms/anchoring/LISPValue.h" // not ported
+#include "algorithms/anchoring/LISPValueWeightor.h" // not ported
+#include "algorithms/anchoring/LISSizeWeightor.h" // not ported
+#include "algorithms/anchoring/LISQValueWeightor.h" // not ported
+#include "algorithms/anchoring/FindMaxInterval.h" // not ported
+#include "algorithms/anchoring/MapBySuffixArray.h" // not ported
+#include "datastructures/anchoring/ClusterList.h" // not ported
+#include "algorithms/anchoring/ClusterProbability.h" // not ported
+#include "algorithms/anchoring/BWTSearch.h" // not ported
+#include "datastructures/metagenome/SequenceIndexDatabase.h" // not ported
+#include "datastructures/metagenome/TitleTable.h" // not ported
+#include "suffixarray/SharedSuffixArray.hpp"
+#include "suffixarray/SuffixArrayTypes.hpp"
+#include "tuples/TupleCountTable.hpp" 
+#include "datastructures/anchoring/WeightedInterval.h" // not ported
+#include "anchoring/AnchorParameters.hpp"
+#include "datastructures/alignment/AlignmentCandidate.hpp"
+#include "datastructures/alignment/AlignmentBlock.h" // partial port
+#include "datastructures/alignment/AlignmentContext.hpp"
+#include "datastructures/mapping/MappingMetrics.h" // not ported
+#include "datastructures/reads/ReadInterval.h" // not ported
+#include "utils/FileOfFileNames.h" // not ported
+#include "utils/RegionUtils.h" // not ported
+#include "utils/TimeUtils.h" // not ported
+#include "qvs/QualityTransform.hpp"
+#include "files/ReaderAgglomerate.hpp"
+#include "files/CCSIterator.h" // not ported
+#include "files/FragmentCCSIterator.h" // not ported
+#include "HDFRegionTableReader.hpp"
+#include "datastructures/bwt/BWT.h" // not ported
+#include "datastructures/sequence/PackedDNASequence.h" // not ported
+#include "CommandLineParser.h" // not ported
+#include "qvs/QualityValue.hpp"
+#include "statistics/VarianceAccumulator.h" // not ported
+#include "statistics/pdfs.h" // not ported
+#include "statistics/cdfs.h" // not ported
+#include "statistics/statutils.h" // not ported
+#include "statistics/LookupAnchorDistribution.h" // not ported
 
 #define MAX_PHRED_SCORE 254
 #define MAPQV_END_ALIGN_WIGGLE 5
