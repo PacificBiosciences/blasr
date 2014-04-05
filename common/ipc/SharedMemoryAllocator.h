@@ -4,6 +4,7 @@
 #include <iostream>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <sys/mman.h>
 
 using namespace std;
