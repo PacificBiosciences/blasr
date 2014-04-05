@@ -14,7 +14,7 @@ class BaseScoreFunction {
     affineOpen = affineExtend = 0;
   }
 
-  BaseScoreFunction(int insP, int delP, int subPriorP, int delPriorP, int affineExtensionP, int affineOpenP)  {
+  BaseScoreFunction(int insP, int delP, int subPriorP, int delPriorP, int affineExtensionP = 0 , int affineOpenP = 0)  {
     ins = insP;
     del = delP;
     substitutionPrior = subPriorP;
