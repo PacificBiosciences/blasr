@@ -71,7 +71,7 @@ class BufferedHDFArray : public HDFData, public HDFWriteBuffer<T> {
 			delete[] dimSize;
       dimSize = NULL;
 		}
-		this->HDFWriteBuffer<T>::~HDFWriteBuffer();
+		this->HDFWriteBuffer<T>::~HDFWriteBuffer<T>();
 	}
   
   void SetBufferSize(int _bufferSize) {
