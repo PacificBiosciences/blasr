@@ -101,6 +101,10 @@ FASTAReader(string &fileName) {
 		}
 		SetFileSize();
 		filePtr = (char*) mmap(0, fileSize, PROT_READ, MAP_PRIVATE, fileDes, 0);
+		if (filePtr==NULL) {
+			cout << "mmap memory assignment failed for filesize " << fileSize << endl;
+			exit(1);
+		}
 		curPos = 0;
 		return 1;
 	}
