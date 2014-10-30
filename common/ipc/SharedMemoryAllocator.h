@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <stdio.h>
 
 using namespace std;
 template<typename T_Data>
@@ -23,6 +24,7 @@ int AllocateMappedShare(string &handle, int dataLength, T_Data *&dataPtr, int &s
 		// Handle this better later on.
 		//
 		cout << "ERROR, MEMORY MAP FAILED." << endl;
+		perror("mmap fail in AllocateMappedShare");
 		exit(1);
 	}
 	cout << "done mapping." << endl;
