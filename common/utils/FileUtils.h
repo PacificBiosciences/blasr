@@ -8,8 +8,7 @@
 #include "sys/mman.h"
 #include <stdio.h>
 
-#include <eerno.h>
-extern int errno;
+#include <errno.h>
 
 using namespace std;
 

@@ -18,7 +18,6 @@
 #include "datastructures/metagenome/SequenceIndexDatabase.h"
 #include "FASTASequence.h"
 
-extern int errno;
 using namespace std;
 class FASTAReader {
  protected:
