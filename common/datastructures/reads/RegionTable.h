@@ -7,6 +7,13 @@
 #include "../../Enumerations.h"
 using namespace std;
 
+/*
+  It appears that this class is being passed to something in the STL and that it is being compared to an int.
+  That comparison fails b/c there is no explicit cast-to-int for a RegionAnnotation.
+  
+  It looks like either you intend for some member function's return value to be passed to the STL algorithm,
+  or you want to write RegionAnnotation::int()const {} to allow the implicit cast to work
+ */
 class RegionAnnotation {
  public:
 	typedef enum T_AnnotationRow {HoleNumber, RegionType, RegionStart, RegionEnd, RegionScore} AnnotationRow;
