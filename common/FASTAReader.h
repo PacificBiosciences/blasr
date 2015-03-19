@@ -10,6 +10,8 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include<errno.h>
+#include <stdio.h>
 
 #include "sys/mman.h"
 #include "sys/fcntl.h"
@@ -101,6 +103,12 @@ FASTAReader(string &fileName) {
 		}
 		SetFileSize();
 		filePtr = (char*) mmap(0, fileSize, PROT_READ, MAP_PRIVATE, fileDes, 0);
+		if (filePtr==MAP_FAILED) {
+                        cout << "mmap memory assignment failed for filesize " << fileSize << endl;
+                        cout << "Error number " << errno << "for file name" << seqInName << endl;
+                        perror("in FASTAReader::Init ");
+                        exit(1);
+		}
 		curPos = 0;
 		return 1;
 	}

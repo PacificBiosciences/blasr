@@ -8,6 +8,8 @@
 #include "sys/mman.h"
 #include <stdio.h>
 
+#include <errno.h>
+
 using namespace std;
 
 bool FileExists(string &fileName) {
@@ -61,6 +63,11 @@ int CountLinesInFile(string fileName) {
   fileSize = lseek(fileDes, 0, SEEK_END);
   lseek(fileDes, 0, SEEK_SET);
   filePtr = (char*) mmap(0, fileSize, PROT_READ, MAP_PRIVATE, fileDes, 0);
+  if (filePtr==MAP_FAILED) {
+    cout << "mmap memory assignment in CountLinesInFile failed for filesize " << fileSize << " for file "<<fileName <<endl;
+    cout << "Error number " << errno << "for file name" << fileName << endl;
+    exit(1);
+  }
   long pos;
   int numLines = 0;
   for (pos = 0; pos < fileSize; pos++, filePtr++) {
