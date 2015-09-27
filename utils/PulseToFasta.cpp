@@ -229,20 +229,20 @@ int main(int argc, char* argv[]) {
       for (intvIndex = 0; intvIndex < subreadIntervals.size(); intvIndex++) {
         SMRTSequence subreadSequence, subreadSequenceRC;
 					
-        subreadSequence.subreadStart = subreadIntervals[intvIndex].start;
-        subreadSequence.subreadEnd   = subreadIntervals[intvIndex].end;
+        subreadSequence.SubreadStart(subreadIntervals[intvIndex].start);
+        subreadSequence.SubreadEnd  (subreadIntervals[intvIndex].end);
           
         // 
         // When trimming by region, only output the parts of the
         // subread that overlap the hq region.
         //
         if (trimByRegion == true) {
-          subreadSequence.subreadStart = max((DNALength) subreadIntervals[intvIndex].start, hqReadStart);
-          subreadSequence.subreadEnd   = min((DNALength) subreadIntervals[intvIndex].end, hqReadEnd);
+          subreadSequence.SubreadStart(max((DNALength) subreadIntervals[intvIndex].start, hqReadStart));
+          subreadSequence.SubreadEnd  ( min((DNALength) subreadIntervals[intvIndex].end, hqReadEnd));
         }
 
-        if (subreadSequence.subreadStart >= subreadSequence.subreadEnd or 
-            subreadSequence.subreadEnd - subreadSequence.subreadStart <= minSubreadLength) {
+        if (subreadSequence.SubreadStart() >= subreadSequence.SubreadEnd() or 
+            subreadSequence.SubreadEnd() - subreadSequence.SubreadStart() <= minSubreadLength) {
           //
           // There is no high qualty portion of this subread. Skip it.
           //
@@ -256,8 +256,8 @@ int main(int argc, char* argv[]) {
         //
         // Print the subread, adding the coordinates as part of the title.
         //
-        subreadSequence.ReferenceSubstring(seq, subreadSequence.subreadStart, 
-                                           subreadSequence.subreadEnd - subreadSequence.subreadStart);
+        subreadSequence.ReferenceSubstring(seq, subreadSequence.SubreadStart(), 
+                                           subreadSequence.SubreadLength());
         stringstream titleStream;
         titleStream << seq.title;
         if (splitSubreads) {
@@ -265,8 +265,8 @@ int main(int argc, char* argv[]) {
           // Add the subread coordinates if splitting on subread.
           //
           titleStream << "/" 
-                      << subreadSequence.subreadStart
-                      << "_" << subreadSequence.subreadEnd;
+                      << subreadSequence.SubreadStart()
+                      << "_" << subreadSequence.SubreadEnd();
         }
           
         // 

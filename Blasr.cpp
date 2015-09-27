@@ -490,11 +490,11 @@ void AlignIntervals(T_TargetSequence &genome, T_QuerySequence &read, T_QuerySequ
     // Stretch the alignment interval so that it is close to where
     // the read actually starts.
     //
-    DNALength subreadStart = read.subreadStart;
-    DNALength subreadEnd   = read.subreadEnd;
+    DNALength subreadStart = read.SubreadStart();
+    DNALength subreadEnd   = read.SubreadEnd();
     if ((*intvIt).GetStrandIndex() == Reverse) {
-      subreadEnd   = read.MakeRCCoordinate(read.subreadStart) + 1;
-      subreadStart = read.MakeRCCoordinate(read.subreadEnd-1);
+      subreadEnd   = read.MakeRCCoordinate(read.SubreadStart()) + 1;
+      subreadStart = read.MakeRCCoordinate(read.SubreadEnd()-1);
     }
 
     DNALength lengthBeforeFirstMatch = ((*intvIt).qStart - subreadStart) * params.approximateMaxInsertionRate ;
@@ -634,7 +634,7 @@ void AlignIntervals(T_TargetSequence &genome, T_QuerySequence &read, T_QuerySequ
     // First count how much of the read matches the genome exactly.
     for (m = 0; m < intvIt->matches.size(); m++) { intervalSize += intvIt->matches[m].l;} 
 
-    int subreadLength = forrev[(*intvIt).GetStrandIndex()]->subreadEnd - forrev[(*intvIt).GetStrandIndex()]->subreadStart;
+    int subreadLength = forrev[(*intvIt).GetStrandIndex()]->SubreadEnd() - forrev[(*intvIt).GetStrandIndex()]->SubreadStart();
     if ((1.0*intervalSize) / subreadLength < params.sdpBypassThreshold and !params.emulateNucmer) {
       //
       // Not enough of the read maps to the genome, need to use
@@ -1396,9 +1396,8 @@ void RefineAlignment(vector<T_Sequence*> &bothQueryStrands,
   if (params.doGlobalAlignment) {
     SMRTSequence subread;
     subread.ReferenceSubstring(*bothQueryStrands[0], 
-                               bothQueryStrands[0]->subreadStart,
-                               (bothQueryStrands[0]->subreadEnd - 
-                                bothQueryStrands[0]->subreadStart));
+                               bothQueryStrands[0]->SubreadStart(),
+                               (bothQueryStrands[0]->SubreadLength()));
 
     int drift = ComputeDrift(alignmentCandidate);
     T_AlignmentCandidate refinedAlignment;
@@ -1418,7 +1417,7 @@ void RefineAlignment(vector<T_Sequence*> &bothQueryStrands,
     alignmentCandidate.blocks = refinedAlignment.blocks;
     alignmentCandidate.gaps   = refinedAlignment.gaps;
     alignmentCandidate.tPos   = refinedAlignment.tPos;
-    alignmentCandidate.qPos   = refinedAlignment.qPos + bothQueryStrands[0]->subreadStart;
+    alignmentCandidate.qPos   = refinedAlignment.qPos + bothQueryStrands[0]->SubreadStart();
     alignmentCandidate.score  = refinedAlignment.score;
     subread.Free();
   }
@@ -1760,10 +1759,10 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
       }
     }
     else if (params.useBwt){ 
-      numKeysMatched   = MapReadToGenome(bwt, read, read.subreadStart, read.subreadEnd, 
+      numKeysMatched   = MapReadToGenome(bwt, read, read.SubreadStart(), read.SubreadEnd(), 
                                          mappingBuffers.matchPosList, params.anchorParameters, forwardNumBasesMatched);
       if (!params.forwardOnly) {
-        rcNumKeysMatched = MapReadToGenome(bwt, readRC, readRC.subreadStart, readRC.subreadEnd, 
+        rcNumKeysMatched = MapReadToGenome(bwt, readRC, readRC.SubreadStart(), readRC.SubreadEnd(), 
                                            mappingBuffers.rcMatchPosList, params.anchorParameters, reverseNumBasesMatched); 
       }
     }
@@ -1885,7 +1884,7 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
       FindMaxIncreasingInterval(Forward,
                                 mappingBuffers.matchPosList,
                                 // allow for indels to stretch out the mapping of the read.
-                                (DNALength) ((read.subreadEnd - read.subreadStart) * (1 + params.indelRate)), params.nCandidates,
+                                (DNALength) ((read.SubreadLength()) * (1 + params.indelRate)), params.nCandidates,
                                 seqBoundary,
                                 lisPValue,//lisPValue2,
                                 lisWeightFn,
@@ -1898,7 +1897,7 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
       mappingBuffers.clusterList.ResetCoordinates();
 
       FindMaxIncreasingInterval(Reverse, mappingBuffers.rcMatchPosList,
-                                (DNALength) ((read.subreadEnd - read.subreadStart) * (1 + params.indelRate)), params.nCandidates, 
+                                (DNALength) ((read.SubreadLength()) * (1 + params.indelRate)), params.nCandidates, 
                                 seqBoundary,
                                 lisPValue,//lisPValue2
                                 lisWeightFn,
@@ -1911,7 +1910,7 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
       FindMaxIncreasingInterval(Forward,
                                 mappingBuffers.matchPosList,
                                 // allow for indels to stretch out the mapping of the read.
-                                (DNALength) ((read.subreadEnd - read.subreadStart) * (1 + params.indelRate)), params.nCandidates,
+                                (DNALength) ((read.SubreadLength()) * (1 + params.indelRate)), params.nCandidates,
                                 seqBoundary,
                                 lisPValueByWeight, // different from pvaltype == 2 and 0
                                 lisWeightFn,
@@ -1924,7 +1923,7 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
 
       mappingBuffers.clusterList.ResetCoordinates();      
       FindMaxIncreasingInterval(Reverse, mappingBuffers.rcMatchPosList,
-                                (DNALength) ((read.subreadEnd - read.subreadStart) * (1 + params.indelRate)), params.nCandidates, 
+                                (DNALength) ((read.SubreadLength()) * (1 + params.indelRate)), params.nCandidates, 
                                 seqBoundary,
                                 lisPValueByWeight, // different from pvaltype == 2 and 0
                                 lisWeightFn,
@@ -1938,7 +1937,7 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
       FindMaxIncreasingInterval(Forward,
                                 mappingBuffers.matchPosList,
                                 // allow for indels to stretch out the mapping of the read.
-                                (DNALength) ((read.subreadEnd - read.subreadStart) * (1 + params.indelRate)), params.nCandidates,
+                                (DNALength) ((read.SubreadLength()) * (1 + params.indelRate)), params.nCandidates,
                                 seqBoundary,
                                 lisPValueByLogSum, // different from pvaltype == 1 and 0
                                 lisWeightFn,
@@ -1950,7 +1949,7 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
 
       mappingBuffers.clusterList.ResetCoordinates();      
       FindMaxIncreasingInterval(Reverse, mappingBuffers.rcMatchPosList,
-                                (DNALength) ((read.subreadEnd - read.subreadStart) * (1 + params.indelRate)), params.nCandidates, 
+                                (DNALength) ((read.SubreadLength()) * (1 + params.indelRate)), params.nCandidates, 
                                 seqBoundary,
                                 lisPValueByLogSum, // different from pvaltype == 1 and 0
                                 lisWeightFn,
@@ -3028,8 +3027,8 @@ void MakeSubreadOfInterval(SMRTSequence & subreadSequence,
 
     if (!params.preserveReadTitle) {
       smrtRead.SetSubreadTitle(subreadSequence, 
-                               subreadSequence.subreadStart,
-                               subreadSequence.subreadEnd);
+                               subreadSequence.SubreadStart(),
+                               subreadSequence.SubreadEnd());
     }
     else {
       subreadSequence.CopyTitle(smrtRead.title);
@@ -3055,9 +3054,9 @@ void MakeSubreadRC(SMRTSequence & subreadSequenceRC,
   subreadSequence.MakeRC(subreadSequenceRC);
   // Update start and end positions of subreadSequenceRC in the 
   // coordinate of reverse compelement sequence of the SMRT read.
-  subreadSequenceRC.subreadStart = smrtRead.length - subreadSequence.subreadEnd;
-  subreadSequenceRC.subreadEnd   = smrtRead.length - subreadSequence.subreadStart;
-  subreadSequenceRC.zmwData      = smrtRead.zmwData;
+  subreadSequenceRC.SubreadStart(smrtRead.length - subreadSequence.SubreadEnd());
+  subreadSequenceRC.SubreadEnd  (smrtRead.length - subreadSequence.SubreadStart());
+  subreadSequenceRC.zmwData     = smrtRead.zmwData;
 }
 
 // Print all alignments for subreads in allReadAlignments.
@@ -3632,8 +3631,8 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
       //
       vector<T_AlignmentCandidate*> alignmentPtrs;
       mapData->metrics.numReads++;
-      smrtRead.subreadStart   = 0; smrtRead.subreadEnd   = smrtRead.length;
-      smrtReadRC.subreadStart = 0; smrtReadRC.subreadEnd = smrtRead.length;
+      smrtRead.SubreadStart(0).SubreadEnd(smrtRead.length);
+      smrtReadRC.SubreadStart(0).SubreadEnd(smrtRead.length);
 
       MapRead(smrtRead, smrtReadRC, 
               genome, sarray, *bwtPtr, seqBoundary, ct, seqdb, params, mapData->metrics,

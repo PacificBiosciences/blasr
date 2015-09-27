@@ -142,7 +142,7 @@ int main(int argc, char* argv[]) {
 
             if (seq.length == 0 and subreadIntervals.size() > 0) {
                 cout << "WARNING! A high quality interval region exists for a read of length 0." <<endl;
-                cout << "  The offending ZMW number is " << seq.zmwData.holeNumber << endl;
+                cout << "  The offending ZMW number is " << seq.HoleNumber() << endl;
                 seq.Free();
                 continue;
             }
@@ -159,8 +159,8 @@ int main(int argc, char* argv[]) {
 
                 if (subreadLength < minSubreadLength) continue;
 
-                subreadSequence.subreadStart = subreadStart;
-                subreadSequence.subreadEnd   = subreadEnd;
+                subreadSequence.SubreadStart(subreadStart);
+                subreadSequence.SubreadEnd  (subreadEnd);
                 subreadSequence.ReferenceSubstring(seq, subreadStart, subreadLength);      
 
             
