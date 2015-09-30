@@ -101,7 +101,6 @@ int main(int argc, char* argv[]) {
         if (splitSubreads) {
             hdfRegionReader.Initialize(regionFileNames[plsFileIndex]);
             hdfRegionReader.ReadTable(regionTable);
-            regionTable.SortTableByHoleNumber();
         }
         
         ReaderAgglomerate reader;
@@ -137,8 +136,12 @@ int main(int argc, char* argv[]) {
             DNALength hqReadStart, hqReadEnd;
             int score;
             GetReadTrimCoordinates(seq, seq.zmwData, regionTable, hqReadStart, hqReadEnd, score);
-            subreadIntervals.clear(); // clear old, new intervals are appended.
-            CollectSubreadIntervals(seq,&regionTable, subreadIntervals);
+
+            if (regionTable.HasHoleNumber(seq.HoleNumber())) {
+                subreadIntervals = regionTable[seq.HoleNumber()].SubreadIntervals(seq.length, true, true);
+            } else {
+                subreadIntervals = {};
+            }
 
             if (seq.length == 0 and subreadIntervals.size() > 0) {
                 cout << "WARNING! A high quality interval region exists for a read of length 0." <<endl;

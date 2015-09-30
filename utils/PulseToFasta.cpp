@@ -107,7 +107,6 @@ int main(int argc, char* argv[]) {
         if (trimByRegion or maskByRegion or splitSubreads) {
             hdfRegionReader.Initialize(regionFileNames[pls2rgn[plsFileIndex]]);
             hdfRegionReader.ReadTable(regionTable);
-            regionTable.SortTableByHoleNumber();
         }
 
         ReaderAgglomerate reader;
@@ -174,49 +173,52 @@ int main(int argc, char* argv[]) {
                 continue;
             }	
 
-      //
-      // Determine the high quality boundaries of the read.  This is
-      // the full read is no hq regions exist, or it is stated to
-      // ignore regions.
-      //
-      DNALength hqReadStart, hqReadEnd;
-      int hqRegionScore;
-      if (GetReadTrimCoordinates(seq, seq.zmwData, regionTable, hqReadStart, hqReadEnd, hqRegionScore) == false or 
-          (trimByRegion == false and maskByRegion == false)) {
-        hqReadStart = 0;
-        hqReadEnd   = seq.length;
-      }
-      
-      //
-      // Mask off the low quality portions of the reads.
-      //
-			if (maskByRegion) {
-        if (hqReadStart > 0) {
-          fill(&seq.seq[0], &seq.seq[hqReadStart], 'N');
-        }
-        if (hqReadEnd != seq.length) {
-          fill(&seq.seq[hqReadEnd], &seq.seq[seq.length], 'N');
-        }
-			}
-      
+            //
+            // Determine the high quality boundaries of the read.  This is
+            // the full read is no hq regions exist, or it is stated to
+            // ignore regions.
+            //
+            DNALength hqReadStart, hqReadEnd;
+            int hqRegionScore;
+            if (GetReadTrimCoordinates(seq, seq.zmwData, regionTable, hqReadStart, hqReadEnd, hqRegionScore) == false or 
+                    (trimByRegion == false and maskByRegion == false)) {
+                hqReadStart = 0;
+                hqReadEnd   = seq.length;
+            }
+
+            //
+            // Mask off the low quality portions of the reads.
+            //
+            if (maskByRegion) {
+                if (hqReadStart > 0) {
+                    fill(&seq.seq[0], &seq.seq[hqReadStart], 'N');
+                }
+                if (hqReadEnd != seq.length) {
+                    fill(&seq.seq[hqReadEnd], &seq.seq[seq.length], 'N');
+                }
+            }
 
 
-      //
-      // Now possibly print the full read with masking.  This could be handled by making a 
-      // 
-			if (splitSubreads == false) {
-        ReadInterval wholeRead(0, seq.length);
-        // The set of subread intervals is just the entire read.
-        subreadIntervals.clear();
-        subreadIntervals.push_back(wholeRead);
-			}
-			else {
-				//
-				// Print subread coordinates no matter whether or not reads have subreads.
-				//
-				subreadIntervals.clear(); // clear old, new intervals are appended.
-				CollectSubreadIntervals(seq, &regionTable, subreadIntervals);
-      }
+
+            //
+            // Now possibly print the full read with masking.  This could be handled by making a 
+            // 
+            if (splitSubreads == false) {
+                ReadInterval wholeRead(0, seq.length);
+                // The set of subread intervals is just the entire read.
+                subreadIntervals.clear();
+                subreadIntervals.push_back(wholeRead);
+            }
+            else {
+                //
+                // Print subread coordinates no matter whether or not reads have subreads.
+                //
+                if (regionTable.HasHoleNumber(seq.HoleNumber())) {
+                    subreadIntervals = regionTable[seq.HoleNumber()].SubreadIntervals(seq.length, false, true);
+                } else {
+                    subreadIntervals = {};
+                }
+            }
       //
       // Output all subreads as separate sequences.
       //

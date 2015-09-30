@@ -3355,8 +3355,9 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
         // Grab the subread & adapter intervals from the entire region table to
         // iterate over.
         //
-        CollectSubreadIntervals(smrtRead, mapData->regionTablePtr, subreadIntervals, params.byAdapter);
-        CollectAdapterIntervals(smrtRead, mapData->regionTablePtr, adapterIntervals);
+        assert(mapData->regionTablePtr->HasHoleNumber(smrtRead.HoleNumber())); 
+        subreadIntervals = (*(mapData->regionTablePtr))[smrtRead.HoleNumber()].SubreadIntervals(smrtRead.length, params.byAdapter);
+        adapterIntervals = (*(mapData->regionTablePtr))[smrtRead.HoleNumber()].AdapterIntervals();
       }
 
       // The assumption is that neighboring subreads must have the opposite 
@@ -4350,7 +4351,6 @@ int main(int argc, char* argv[]) {
       regionTable.Reset();
       regionTableReader->ReadTable(regionTable);
       regionTableReader->Close();
-      regionTable.SortTableByHoleNumber();
     }
 
     //
