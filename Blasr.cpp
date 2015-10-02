@@ -2226,7 +2226,6 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
 
   for (i = 0; i < alignmentPtrs.size(); i++) { 
     T_AlignmentCandidate *aref = alignmentPtrs[i];
-    //    aref->qStrand = aref->readIndex;
     if (aref->tStrand == 0) {
       aref->qName = read.GetName();
     }
@@ -3151,8 +3150,6 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
   SMRTSequence unrolledReadRC;
   CCSSequence  ccsRead;
 
-  int readIndex = -1;
-
   // Print verbose logging to pid.threadid.log for each thread.
   ofstream threadOut;
   if (params.verbosity >= 3) {
@@ -3187,7 +3184,6 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
         readIsCCS = true;
         smrtRead.Copy(ccsRead);
         ccsRead.SetQVScale(params.qvScaleType);
-        ++readIndex;
         smrtRead.SetQVScale(params.qvScaleType);
       }
       assert(ccsRead.zmwData.holeNumber == smrtRead.zmwData.holeNumber and
@@ -3197,7 +3193,6 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
         break;
       }
       else {
-        ++readIndex;
         smrtRead.SetQVScale(params.qvScaleType);
       }
     }
@@ -3231,18 +3226,7 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
     //
     // Give the opportunity to align a subset of reads.
     //
-    if ((params.maxReadIndex >= 0 and 
-         smrtRead.zmwData.holeNumber > UInt(params.maxReadIndex))) {
-      if (readIsCCS) {
-        ccsRead.Free();
-      }
-      smrtRead.Free();
-      break;
-    }
-
     if (readHasGoodRegion == false or 
-        (params.readIndex >= 0 and 
-         smrtRead.zmwData.holeNumber != UInt(params.readIndex)) or
         (params.holeNumberRangesStr.size() > 0 and
          not params.holeNumberRanges.contains(smrtRead.zmwData.holeNumber))) {
       //
@@ -3252,13 +3236,11 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
         ccsRead.Free();
       }
       smrtRead.Free();
-      // Stop processing once the specified read index is reached.
-      // Eventually this will change to just seek to readIndex, and
+      // Stop processing once the specified zmw hole number is reached.
+      // Eventually this will change to just seek to hole number, and
       // just align one read anyway.
-      if ((params.readIndex >= 0 and 
-           smrtRead.zmwData.holeNumber > UInt(params.readIndex)) or
-          (params.holeNumberRangesStr.size() > 0 and 
-           smrtRead.zmwData.holeNumber > params.holeNumberRanges.max())){
+      if (params.holeNumberRangesStr.size() > 0 and 
+          smrtRead.zmwData.holeNumber > params.holeNumberRanges.max()){
         break;
       }
       continue;

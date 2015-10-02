@@ -149,11 +149,9 @@ void RegisterBlasrOptions(CommandLineParser & clp, MappingParameters & params) {
     clp.RegisterFlagOption("h", &params.printVerboseHelp, "");
     clp.RegisterFlagOption("help", &params.printDiscussion, "");
     clp.RegisterFloatOption("accuracyPrior",    &params.readAccuracyPrior, "", CommandLineParser::NonNegativeFloat);
-    clp.RegisterIntOption("readIndex", &params.readIndex, "", CommandLineParser::NonNegativeInteger);
     // holeNumberRangesStr is a string of comma-delimited hole number ranges, such as '1,2,3,10-15'.
     // Blasr only analyzes reads whose hole numbers are in the specified hole number ranges. 
     clp.RegisterStringOption("holeNumbers", &params.holeNumberRangesStr, "");
-    clp.RegisterIntOption("maxReadIndex", &params.maxReadIndex, "", CommandLineParser::NonNegativeInteger);
     clp.RegisterIntOption("substitutionPrior",  &params.substitutionPrior, "", CommandLineParser::NonNegativeInteger);
     clp.RegisterIntOption("deletionPrior",  &params.globalDeletionPrior, "", CommandLineParser::NonNegativeInteger);
     clp.RegisterIntOption("recurseOver", &params.recurseOver, "", CommandLineParser::NonNegativeInteger);

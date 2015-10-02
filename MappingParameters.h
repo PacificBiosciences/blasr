@@ -41,7 +41,6 @@ public:
     int argi;
     int nProc;
     int globalChainType;
-    int readIndex;
     SAMOutput::Clipping clipping;
     string clippingString;
     QVScale qvScaleType;
@@ -174,7 +173,6 @@ public:
     int   substitutionPrior;
     int   globalDeletionPrior;
     bool  outputByThread;
-    int   maxReadIndex;
     int   recurseOver;
     bool  forPicard;
     bool  separateGaps;
@@ -205,8 +203,6 @@ public:
     bool enableHiddenPaths;
 
     void Init() {
-        readIndex = -1;
-        maxReadIndex = -1;
         qvMatchWeight = 1.0;
         qvMismatchWeight = 1.0;
         qvInsWeight = 1.0;
