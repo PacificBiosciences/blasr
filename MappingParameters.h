@@ -154,7 +154,6 @@ public:
     bool useCcsOnly;
     bool detailedSDPAlignment, nouseDetailedSDPAlignment;
     int  chunkSize;
-    int  subreadMapType;
     int  sdpFilterType;
     bool useGuidedAlign;
     int  guidedAlignBandSize;
@@ -325,7 +324,6 @@ public:
         printSubreadTitle = true;
         detailedSDPAlignment = true;
         nouseDetailedSDPAlignment = false;
-        subreadMapType = 0;
         useCcs     = false;
         useCcsOnly = false;
         useAllSubreadsInCcs = false;
@@ -528,10 +526,6 @@ public:
             exit(1);
         }
 
-        if (subreadMapType < 0 or subreadMapType > 1) {
-            cout << "Error, subreadImplType must be 0 or 1" << endl;
-            exit(1);
-        }
 
         if (emulateNucmer) {
             SetEmulateNucmer();

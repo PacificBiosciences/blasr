@@ -2999,31 +2999,11 @@ void AlignSubreadToAlignmentTarget(ReadAlignments & allReadAlignments,
 void MakeSubreadOfInterval(SMRTSequence & subreadSequence,
     SMRTSequence & smrtRead, ReadInterval & subreadInterval, 
     MappingParameters & params) {
-    //
-    // subreadMapType is a way of limiting the portion of the read
-    // that is aligned.  The output is similar, but the
-    // computation is slightly different.  The subreadMapType 0
-    // was written first, and just creates a hard mask over the
-    // regions that are not to be aligned.  The subreadMapType is
-    // slightly more formal mode where a new read is pointed to
-    // the subread then aligned.
-    //
-    // subreadMapType of 0 is always used, however eventually it
-    // may be faster to go to 1, just 1 isn't tested thoroughly
-    // yet.
-    //
-    // Note, for proper SAM printing, subreadMaptype of 0 is needed.
-    //
     int start = subreadInterval.start;
     int end   = subreadInterval.end;
         
     assert(smrtRead.length >= subreadSequence.length);
-    if (params.subreadMapType == 0) {
-      smrtRead.MakeSubreadAsMasked(subreadSequence, start, end); 
-    }
-    else if (params.subreadMapType == 1) {
-      smrtRead.MakeSubreadAsReference(subreadSequence, start, end); 
-    }
+    smrtRead.MakeSubreadAsMasked(subreadSequence, start, end); 
 
     if (!params.preserveReadTitle) {
       smrtRead.SetSubreadTitle(subreadSequence, 
@@ -3518,20 +3498,17 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
         // the end of this loop to the smrtRead, which exists for the
         // duration of aligning all subread of the smrtRead.
         //
-        if (params.subreadMapType == 0) {
-          int a;
-          for (a = 0; a < alignmentPtrs.size(); a++) {
+        for (size_t a = 0; a < alignmentPtrs.size(); a++) {
             if (alignmentPtrs[a]->qStrand == 0) {
-              alignmentPtrs[a]->qAlignedSeq.ReferenceSubstring(smrtRead,
-                                                               alignmentPtrs[a]->qAlignedSeq.seq - subreadSequence.seq,
-                                                               alignmentPtrs[a]->qAlignedSeqLength);
+                alignmentPtrs[a]->qAlignedSeq.ReferenceSubstring(smrtRead,
+                        alignmentPtrs[a]->qAlignedSeq.seq - subreadSequence.seq,
+                        alignmentPtrs[a]->qAlignedSeqLength);
             }
             else {
-              alignmentPtrs[a]->qAlignedSeq.ReferenceSubstring(smrtReadRC,
-                                                               alignmentPtrs[a]->qAlignedSeq.seq - subreadSequenceRC.seq, 
-                                                               alignmentPtrs[a]->qAlignedSeqLength);
+                alignmentPtrs[a]->qAlignedSeq.ReferenceSubstring(smrtReadRC,
+                        alignmentPtrs[a]->qAlignedSeq.seq - subreadSequenceRC.seq, 
+                        alignmentPtrs[a]->qAlignedSeqLength);
             }
-          }
         }
         // Fix for memory leakage bug due to undeleted Alignment Candidate objectts which wasn't selected
         // for printing

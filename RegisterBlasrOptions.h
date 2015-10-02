@@ -58,7 +58,6 @@ void RegisterBlasrOptions(CommandLineParser & clp, MappingParameters & params) {
     clp.RegisterFlagOption("useGuidedAlign", (bool*)&trashbinBool, "");
     clp.RegisterFlagOption("noUseGuidedAlign", (bool*)&params.useGuidedAlign, "");
     clp.RegisterFlagOption("header", (bool*)&params.printHeader, "");
-    clp.RegisterIntOption("subreadImplType", &params.subreadMapType, "", CommandLineParser::PositiveInteger);
     clp.RegisterIntOption("bandSize", &params.bandSize, "", CommandLineParser::PositiveInteger);  
     clp.RegisterIntOption("extendBandSize", &params.extendBandSize, "", CommandLineParser::PositiveInteger);  
     clp.RegisterIntOption("guidedAlignBandSize", &params.guidedAlignBandSize, "", CommandLineParser::PositiveInteger);  
@@ -133,7 +132,6 @@ void RegisterBlasrOptions(CommandLineParser & clp, MappingParameters & params) {
     // that directions of subreads can not be inferred accurately.
     clp.RegisterFlagOption("concordantAlignBothDirections", &params.concordantAlignBothDirections, "");
     clp.RegisterIntOption("flankSize", &params.flankSize, "", CommandLineParser::NonNegativeInteger);
-    clp.RegisterIntOption("subreadMapType", &params.subreadMapType, "", CommandLineParser::NonNegativeInteger);
     clp.RegisterStringOption("titleTable", &params.titleTableName, "");
     clp.RegisterFlagOption("useSensitiveSearch", &params.doSensitiveSearch, "");
     clp.RegisterFlagOption("ignoreRegions", &params.useRegionTable, "");
