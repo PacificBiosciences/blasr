@@ -3145,21 +3145,13 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
   bwtPtr = mapData->bwtPtr;
   SeqBoundaryFtr<FASTQSequence> seqBoundary(&seqdb);
 
-  VectorIndex i, j;
-  if (params.match != 0) {
-  }    
-
   int numAligned = 0;
   
   SMRTSequence smrtRead, smrtReadRC;
   SMRTSequence unrolledReadRC;
   CCSSequence  ccsRead;
-  RegionAnnotation annotation;
-  T_Sequence read;
-  int readIndex = -1;
-  int readsFileIndex;
-  bool readIsCCS = false;
 
+  int readIndex = -1;
 
   // Print verbose logging to pid.threadid.log for each thread.
   ofstream threadOut;
@@ -3177,6 +3169,7 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
   //
   MappingBuffers mappingBuffers;
   while (true) {
+    bool readIsCCS = false;
     //
     // Scan the next read from input.  This may either be a CCS read,
     // or regular read (though this may be aligned in whole, or by
@@ -3778,7 +3771,6 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData) {
   smrtRead.Free();
   smrtReadRC.Free();
   unrolledReadRC.Free();
-  read.Free();
   ccsRead.Free();
 
   if (params.nProc > 1) {
