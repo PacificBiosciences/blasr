@@ -174,40 +174,4 @@ int CountZero(unsigned char *ptr, int length)
     return nZero;
 }
 
-bool FirstContainsSecond(DNALength aStart, DNALength aEnd, DNALength bStart, DNALength bEnd) 
-{
-    return ((bStart > aStart and bEnd <= aEnd) or
-            (bStart >= aStart and bEnd < aEnd));
-}
-
-float ComputePMatch(float accuracy, int anchorLength) 
-{
-    assert(anchorLength >= 0);
-    if (anchorLength == 0) { 
-        return 0;
-    }
-    else {
-        return pow(accuracy,anchorLength);
-    }
-}
-
-//
-// Assume the number of mismatches in a row follow a geometric distribution.
-//
-void GeometricDistributionSummaryStats(float pSuccess,
-                                       float &mean, float &variance) 
-{
-    mean = 1/pSuccess;
-    variance = (1-pSuccess)/ (pow(pSuccess,2));
-}
-
-
-
-int ComputeExpectedWaitingBases(float mean, float variance, float certainty) 
-{
-    float nStdDev;
-    assert(FindQNorm(certainty, nStdDev) != false);
-    return mean + sqrt(variance) * nStdDev;
-}
-
 #endif

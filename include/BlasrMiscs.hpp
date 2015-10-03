@@ -84,20 +84,6 @@ void MakeSubreadRC(SMRTSequence & subreadSequenceRC,
 //-------------------------MISC-----------------------------------//
 int CountZero(unsigned char *ptr, int length);
 
-//FIXME: delete unused function
-bool FirstContainsSecond(DNALength aStart, DNALength aEnd, DNALength bStart, DNALength bEnd);
-
-//FIXME: delete unused function
-// Assume the number of mismatches in a row follow a geometric distribution.
-void GeometricDistributionSummaryStats(float pSuccess,
-                                       float &mean, float &variance);
-
-//FIXME: delete unused function
-int ComputeExpectedWaitingBases(float mean, float variance, float certainty);
-
-//FIXME: delete unused function
-float ComputePMatch(float accuracy, int anchorLength);
-
 #include "BlasrMiscsImpl.hpp"
 
 #endif
