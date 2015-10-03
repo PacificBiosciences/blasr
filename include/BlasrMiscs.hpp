@@ -44,7 +44,7 @@ template<typename T_Sequence>
 bool GetNextReadThroughSemaphore(ReaderAgglomerate &reader, 
                                  MappingParameters &params,
                                  T_Sequence &read, 
-                                 AlignmentContext &context, 
+                                 string & readGroupId, 
                                  int & associatedRandInt,
                                  MappingSemaphores & semaphores);
 

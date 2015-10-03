@@ -71,6 +71,620 @@ const string GetVersion(void) {
   return version;
 }
 
+/// Scan the next read from input.  This may either be a CCS read,
+/// or regular read (though this may be aligned in whole, or by
+/// subread).
+/// \params[in] reader: FASTA/FASTQ/BAX.H5/CCS.H5/BAM file reader
+/// \params[in] regionTablePtr: RGN.H5 region table pointer.
+/// \params[in] params: mapping parameters.
+/// \params[out] smrtRead: to save smrt sequence.
+/// \params[out] ccsRead: to save ccs sequence.
+/// \params[out] readIsCCS: read is CCSSequence.
+/// \params[out] readGroupId: associated read group id
+/// \params[out] associatedRandInt: random int associated with this zmw,
+///              required to for generating deterministic random 
+///              alignments regardless of nproc.
+/// \params[out] stop: whether or not stop mapping remaining reads.
+/// \returns whether or not to skip mapping reads of this zmw.
+
+bool FetchReads(ReaderAgglomerate * reader,
+                RegionTable * regionTablePtr,
+                SMRTSequence & smrtRead, 
+                CCSSequence & ccsRead,  
+                MappingParameters & params,
+                bool & readIsCCS,
+                std::string & readGroupId,
+                int & associatedRandInt,
+                bool & stop) 
+{
+    if (reader->GetFileType() == HDFCCS ||
+        reader->GetFileType() == HDFCCSONLY) { 
+        if (GetNextReadThroughSemaphore(*reader, params, ccsRead, readGroupId, associatedRandInt, semaphores) == false) {
+            stop = true;
+            return false;
+        }
+        else {
+            readIsCCS = true;
+            smrtRead.Copy(ccsRead);
+            ccsRead.SetQVScale(params.qvScaleType);
+            smrtRead.SetQVScale(params.qvScaleType);
+        }
+        assert(ccsRead.zmwData.holeNumber == smrtRead.zmwData.holeNumber and
+               ccsRead.zmwData.holeNumber == ccsRead.unrolledRead.zmwData.holeNumber);
+    } else {
+        if (GetNextReadThroughSemaphore(*reader, params, smrtRead, readGroupId, associatedRandInt, semaphores) == false) {
+            stop = true;
+            return false;
+        }
+        else {
+            smrtRead.SetQVScale(params.qvScaleType);
+        }
+    }
+
+    //
+    // Only normal (non-CCS) reads should be masked.  Since CCS reads store the raw read, that is masked.
+    //
+    bool readHasGoodRegion = true;
+    if (params.useRegionTable and params.useHQRegionTable) {
+        if (readIsCCS) {
+            readHasGoodRegion = MaskRead(ccsRead.unrolledRead, ccsRead.unrolledRead.zmwData, *regionTablePtr);
+        }
+        else {
+            readHasGoodRegion = MaskRead(smrtRead, smrtRead.zmwData, *regionTablePtr);
+        }
+        //
+        // Store the high quality start and end of this read for masking purposes when printing.
+        //
+        int hqStart, hqEnd;
+        int score;
+        LookupHQRegion(smrtRead.zmwData.holeNumber, *regionTablePtr, hqStart, hqEnd, score);
+        smrtRead.lowQualityPrefix = hqStart;
+        smrtRead.lowQualitySuffix = smrtRead.length - hqEnd;
+        smrtRead.highQualityRegionScore = score;
+    }
+    else {
+        smrtRead.lowQualityPrefix = 0;
+        smrtRead.lowQualitySuffix = 0;
+    }
+
+    //
+    // Give the opportunity to align a subset of reads.
+    //
+    if (readHasGoodRegion == false or 
+        (params.holeNumberRangesStr.size() > 0 and
+         not params.holeNumberRanges.contains(smrtRead.zmwData.holeNumber))) {
+        //
+        // Nothing to do with this read. Skip aligning it entirely.
+        //
+        if (readIsCCS) {
+            ccsRead.Free();
+        }
+        smrtRead.Free();
+        // Stop processing once the specified zmw hole number is reached.
+        // Eventually this will change to just seek to hole number, and
+        // just align one read anyway.
+        if (params.holeNumberRangesStr.size() > 0 and 
+            smrtRead.zmwData.holeNumber > params.holeNumberRanges.max()){
+            stop = true;
+            return false;
+        }
+        return false;
+    }
+
+
+    // 
+    // Discard reads that are too small, or not labeled as having any
+    // useable/good sequence. 
+    //
+    if (smrtRead.length < UInt(params.minReadLength) or readHasGoodRegion == false or 
+            smrtRead.highQualityRegionScore < params.minRawSubreadScore or 
+            (params.maxReadLength != 0 and 
+             smrtRead.length > UInt(params.maxReadLength))) {
+        if (readIsCCS) {
+            ccsRead.Free();
+        }
+        smrtRead.Free();
+        return false;
+    }
+
+    if (smrtRead.qual.Empty() == false and smrtRead.GetAverageQuality() < params.minAvgQual) {
+        if (readIsCCS) {
+            ccsRead.Free();
+        }
+        smrtRead.Free();
+        return false;
+    }
+    return true;
+}
+
+void MapReadsNonCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData,
+                    MappingBuffers & mappingBuffers,
+                    SMRTSequence & smrtRead, 
+                    SMRTSequence & smrtReadRC, 
+                    CCSSequence & ccsRead,  
+                    MappingParameters & params,
+                    const int & associatedRandInt,
+                    ReadAlignments & allReadAlignments,
+                    ofstream & threadOut)
+{
+    DNASuffixArray sarray;
+    TupleCountTable<T_GenomeSequence, DNATuple> ct;
+    SequenceIndexDatabase<FASTQSequence> seqdb;
+    T_GenomeSequence    genome;
+    BWT *bwtPtr;
+
+    mapData->ShallowCopySuffixArray(sarray);
+    mapData->ShallowCopyReferenceSequence(genome);
+    mapData->ShallowCopySequenceIndexDatabase(seqdb);
+    mapData->ShallowCopyTupleCountTable(ct);
+
+    bwtPtr = mapData->bwtPtr;
+    SeqBoundaryFtr<FASTQSequence> seqBoundary(&seqdb);
+
+    
+    vector<ReadInterval> subreadIntervals;
+    vector<int>          subreadDirections;
+    vector<ReadInterval> adapterIntervals; 
+    //
+    // Determine endpoints of this subread in the main read.
+    //
+    if (params.useRegionTable == false) {
+        //
+        // When there is no region table, the subread is the entire
+        // read.
+        //
+        ReadInterval wholeRead(0, smrtRead.length);
+        // The set of subread intervals is just the entire read.
+        subreadIntervals.push_back(wholeRead);
+    }
+    else {
+        // 
+        // Grab the subread & adapter intervals from the entire region table to
+        // iterate over.
+        //
+        assert(mapData->regionTablePtr->HasHoleNumber(smrtRead.HoleNumber())); 
+        subreadIntervals = (*(mapData->regionTablePtr))[smrtRead.HoleNumber()].SubreadIntervals(smrtRead.length, params.byAdapter);
+        adapterIntervals = (*(mapData->regionTablePtr))[smrtRead.HoleNumber()].AdapterIntervals();
+    }
+
+    // The assumption is that neighboring subreads must have the opposite 
+    // directions. So create directions for subread intervals with
+    // interleaved 0s and 1s.
+    CreateDirections(subreadDirections, subreadIntervals.size());
+
+    //
+    // Trim the boundaries of subread intervals so that only high quality
+    // regions are included in the intervals, not N's. Remove intervals
+    // and their corresponding dirctions, if they are shorter than the 
+    // user specified minimum read length or do not intersect with hq 
+    // region at all. Finally, return index of the (left-most) longest
+    // subread in the updated vector.
+    //
+    int longestSubreadIndex = GetHighQualitySubreadsIntervals(
+            subreadIntervals, // a vector of subread intervals.
+            subreadDirections, // a vector of subread directions.
+            smrtRead.lowQualityPrefix, // hq region start pos.
+            smrtRead.length - smrtRead.lowQualitySuffix, // hq end pos.
+            params.minSubreadLength); // minimum read length.
+
+    int bestSubreadIndex = longestSubreadIndex;
+    if (params.concordantTemplate == "longestsubread") {
+        // Use the (left-most) longest full-pass subread as 
+        // template for concordant mapping
+        int longestFullSubreadIndex = GetLongestFullSubreadIndex(
+                subreadIntervals, adapterIntervals);
+        if (longestFullSubreadIndex >= 0) {
+            bestSubreadIndex = longestFullSubreadIndex;
+        }
+    } else if (params.concordantTemplate == "typicalsubread") {
+        // Use the 'typical' full-pass subread as template for
+        // concordant mapping.
+        int typicalFullSubreadIndex = GetTypicalFullSubreadIndex(
+                subreadIntervals, adapterIntervals);
+        if (typicalFullSubreadIndex >= 0) {
+            bestSubreadIndex = typicalFullSubreadIndex;
+        }
+    } else if (params.concordantTemplate == "mediansubread") {
+        // Use the 'median-length' full-pass subread as template for
+        // concordant mapping.
+        int medianFullSubreadIndex = GetMedianLengthFullSubreadIndex(
+                subreadIntervals, adapterIntervals);
+        if (medianFullSubreadIndex >= 0) {
+            bestSubreadIndex = medianFullSubreadIndex;
+        }
+    } else {
+        assert(false);
+    }
+
+    // Flop all directions if direction of the longest subread is 1.
+    if (bestSubreadIndex >= 0 and 
+        bestSubreadIndex < int(subreadDirections.size()) and
+        subreadDirections[bestSubreadIndex] == 1) {
+        UpdateDirections(subreadDirections, true);
+    }
+
+    int startIndex = 0;
+    int endIndex = subreadIntervals.size();
+
+    if (params.concordant) {
+        // Only the longest subread will be aligned in the first round.
+        startIndex = max(startIndex, bestSubreadIndex);
+        endIndex   = min(endIndex, bestSubreadIndex + 1);
+    }
+
+    //
+    // Make room for alignments.
+    //
+    allReadAlignments.Resize(subreadIntervals.size());
+    allReadAlignments.alignMode = Subread;
+
+    DNALength intvIndex;
+    for (intvIndex = startIndex; intvIndex < endIndex; intvIndex++) {
+        SMRTSequence subreadSequence, subreadSequenceRC;
+        MakeSubreadOfInterval(subreadSequence, smrtRead, 
+                subreadIntervals[intvIndex], params);
+        MakeSubreadRC(subreadSequenceRC, subreadSequence, smrtRead);
+
+        //
+        // Store the sequence that is being mapped in case no hits are
+        // found, and missing sequences are printed.
+        //
+        allReadAlignments.SetSequence(intvIndex, subreadSequence);
+
+        vector<T_AlignmentCandidate*> alignmentPtrs;
+        mapData->metrics.numReads++;
+
+        assert(subreadSequence.zmwData.holeNumber == smrtRead.zmwData.holeNumber);
+ 
+        //
+        // Try default and fast parameters to map the read.
+        //
+        MapRead(subreadSequence, subreadSequenceRC, 
+                genome,           // possibly multi fasta file read into one sequence
+                sarray, *bwtPtr,  // The suffix array, and the bwt-fm index structures
+                seqBoundary,      // Boundaries of contigs in the
+                // genome, alignments do not span
+                // the ends of boundaries.
+                ct,               // Count table to use word frequencies in the genome to weight matches.
+                seqdb,            // Information about the names of
+                // chromosomes in the genome, and
+                // where their sequences are in the genome.
+                params,           // A huge list of parameters for
+                // mapping, only compile/command
+                // line values set.
+                mapData->metrics, // Keep track of time/ hit counts,
+                // etc.. Not fully developed, but
+                // should be.
+                alignmentPtrs,    // Where the results are stored.
+                mappingBuffers,   // A class of buffers for structurs
+                // like dyanmic programming
+                // matrices, match lists, etc., that are not
+                // reallocated between calls to
+                // MapRead.  They are cleared though.
+                mapData,          // Some values that are shared
+                // across threads.
+                semaphores);
+
+        //
+        // No alignments were found, sometimes parameters are
+        // specified to try really hard again to find an alignment.
+        // This sets some parameters that use a more sensitive search
+        // at the cost of time.
+        //
+
+        if ((alignmentPtrs.size() == 0 or alignmentPtrs[0]->pctSimilarity < 80) and params.doSensitiveSearch) {
+            MappingParameters sensitiveParams = params;
+            sensitiveParams.SetForSensitivity();
+            MapRead(subreadSequence, subreadSequenceRC, genome, 
+                    sarray, *bwtPtr, 
+                    seqBoundary, ct, seqdb,
+                    sensitiveParams, mapData->metrics, 
+                    alignmentPtrs, mappingBuffers, 
+                    mapData,
+                    semaphores);
+        }
+
+        //
+        // Store the mapping quality values.
+        //
+        if (alignmentPtrs.size() > 0 and 
+            alignmentPtrs[0]->score < params.maxScore and 
+            params.storeMapQV) {
+            StoreMapQVs(subreadSequence, alignmentPtrs, params);
+        }
+
+        // 
+        // Select alignments for this subread.
+        //
+        vector<T_AlignmentCandidate*> selectedAlignmentPtrs =
+            SelectAlignmentsToPrint(alignmentPtrs, params, associatedRandInt);
+        allReadAlignments.AddAlignmentsForSeq(intvIndex, selectedAlignmentPtrs);
+
+        //
+        // Move reference from subreadSequence, which will be freed at
+        // the end of this loop to the smrtRead, which exists for the
+        // duration of aligning all subread of the smrtRead.
+        //
+        for (size_t a = 0; a < alignmentPtrs.size(); a++) {
+            if (alignmentPtrs[a]->qStrand == 0) {
+                alignmentPtrs[a]->qAlignedSeq.ReferenceSubstring(smrtRead,
+                        alignmentPtrs[a]->qAlignedSeq.seq - subreadSequence.seq,
+                        alignmentPtrs[a]->qAlignedSeqLength);
+            }
+            else {
+                alignmentPtrs[a]->qAlignedSeq.ReferenceSubstring(smrtReadRC,
+                        alignmentPtrs[a]->qAlignedSeq.seq - subreadSequenceRC.seq, 
+                        alignmentPtrs[a]->qAlignedSeqLength);
+            }
+        }
+        // Fix for memory leakage bug due to undeleted Alignment Candidate objectts which wasn't selected
+        // for printing
+        // delete all AC which are in complement of SelectedAlignmemntPtrs vector
+        // namely (SelectedAlignmentPtrs/alignmentPtrs)
+        for (int ii = 0; ii < alignmentPtrs.size(); ii++)
+        {
+            int found =0;
+            for (int jj = 0; jj < selectedAlignmentPtrs.size(); jj++)
+            {
+                if (alignmentPtrs[ii] == selectedAlignmentPtrs[jj] )
+                {
+                    found = 1;
+                    break;
+                }
+            }
+            if (found == 0) delete alignmentPtrs[ii];
+        }
+        subreadSequence.Free();
+        subreadSequenceRC.Free();
+    } // End of looping over subread intervals within [startIndex, endIndex).
+
+    if (params.verbosity >= 3) 
+        allReadAlignments.Print(threadOut);
+
+    if (params.concordant) {
+        allReadAlignments.read = smrtRead;
+        allReadAlignments.alignMode = ZmwSubreads;
+
+        if (startIndex >= 0 && startIndex < int(allReadAlignments.subreadAlignments.size())) {
+            vector<T_AlignmentCandidate*> selectedAlignmentPtrs =
+                allReadAlignments.CopySubreadAlignments(startIndex);
+
+            for(int alignmentIndex = 0; alignmentIndex < int(selectedAlignmentPtrs.size()); 
+                    alignmentIndex++) {
+                FlankTAlignedSeq(selectedAlignmentPtrs[alignmentIndex], 
+                                 seqdb, genome, params.flankSize);
+            }
+
+            for (intvIndex = 0; intvIndex < subreadIntervals.size(); intvIndex++) {
+                if (intvIndex == startIndex) continue; 
+                int passDirection = subreadDirections[intvIndex];
+                int passStartBase = subreadIntervals[intvIndex].start;
+                int passNumBases  = subreadIntervals[intvIndex].end - passStartBase;
+                if (passNumBases <= params.minReadLength) {continue;}
+
+                mapData->metrics.numReads++;
+                SMRTSequence subread;
+                subread.ReferenceSubstring(smrtRead, passStartBase, passNumBases);
+                subread.CopyTitle(smrtRead.title);
+                // The unrolled alignment should be relative to the entire read.
+                if (params.clipping == SAMOutput::subread) {
+                    SMRTSequence maskedSubread;
+                    MakeSubreadOfInterval(maskedSubread, smrtRead,
+                                          subreadIntervals[intvIndex], params);
+                    allReadAlignments.SetSequence(intvIndex, maskedSubread);
+                    maskedSubread.Free();
+                } else {
+                    allReadAlignments.SetSequence(intvIndex, smrtRead);
+                }
+
+                for (int alnIndex = 0; alnIndex < selectedAlignmentPtrs.size(); alnIndex++) {
+                    T_AlignmentCandidate * alignment = selectedAlignmentPtrs[alnIndex];
+                    if (alignment->score > params.maxScore) break;
+                    AlignSubreadToAlignmentTarget(allReadAlignments, 
+                            subread,
+                            smrtRead,
+                            alignment,
+                            passDirection, 
+                            subreadIntervals[intvIndex],
+                            intvIndex,
+                            params, mappingBuffers, threadOut);
+                    if (params.concordantAlignBothDirections) {
+                        AlignSubreadToAlignmentTarget(allReadAlignments, 
+                                subread, 
+                                smrtRead, 
+                                alignment,
+                                ((passDirection==0)?1:0),
+                                subreadIntervals[intvIndex], 
+                                intvIndex,
+                                params, mappingBuffers, threadOut);
+                    }
+                } // End of aligning this subread to each selected alignment.
+                subread.Free();
+            } // End of aligning each subread to where the template subread aligned to. 
+            for(int alignmentIndex = 0; alignmentIndex < selectedAlignmentPtrs.size(); 
+                    alignmentIndex++) {
+                if (selectedAlignmentPtrs[alignmentIndex]) 
+                    delete selectedAlignmentPtrs[alignmentIndex];
+            }
+        } // End of if startIndex >= 0 and < subreadAlignments.size()
+    } // End of if params.concordant
+}
+
+void MapReadsCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData,
+                 MappingBuffers & mappingBuffers,
+                 SMRTSequence & smrtRead, 
+                 SMRTSequence & smrtReadRC, 
+                 CCSSequence & ccsRead,  
+                 const bool readIsCCS,
+                 MappingParameters & params,
+                 const int & associatedRandInt,
+                 ReadAlignments & allReadAlignments,
+                 ofstream & threadOut)
+{
+    DNASuffixArray sarray;
+    TupleCountTable<T_GenomeSequence, DNATuple> ct;
+    SequenceIndexDatabase<FASTQSequence> seqdb;
+    T_GenomeSequence    genome;
+    BWT *bwtPtr;
+
+    mapData->ShallowCopySuffixArray(sarray);
+    mapData->ShallowCopyReferenceSequence(genome);
+    mapData->ShallowCopySequenceIndexDatabase(seqdb);
+    mapData->ShallowCopyTupleCountTable(ct);
+
+    bwtPtr = mapData->bwtPtr;
+    SeqBoundaryFtr<FASTQSequence> seqBoundary(&seqdb);
+
+    //
+    // The read must be mapped as a whole, even if it contains subreads.
+    //
+    vector<T_AlignmentCandidate*> alignmentPtrs;
+    mapData->metrics.numReads++;
+    smrtRead.SubreadStart(0).SubreadEnd(smrtRead.length);
+    smrtReadRC.SubreadStart(0).SubreadEnd(smrtRead.length);
+
+    MapRead(smrtRead, smrtReadRC, 
+            genome, sarray, *bwtPtr, seqBoundary, ct, seqdb, params, mapData->metrics,
+            alignmentPtrs, mappingBuffers, mapData, semaphores);
+
+    //
+    // Store the mapping quality values.
+    //
+    if (alignmentPtrs.size() > 0 and 
+        alignmentPtrs[0]->score < params.maxScore and 
+        params.storeMapQV) {
+        StoreMapQVs(smrtRead, alignmentPtrs, params);
+    }
+
+    // 
+    // Select de novo ccs-reference alignments for subreads to align to.
+    //
+    vector<T_AlignmentCandidate*> selectedAlignmentPtrs =
+        SelectAlignmentsToPrint(alignmentPtrs, params, associatedRandInt);
+
+    //
+    // Just one sequence is aligned.  There is one primary hit, and
+    // all other are secondary.
+    //
+
+    if (readIsCCS == false or params.useCcsOnly) {
+        // if -noSplitSubreads or -useccsdenovo.
+        //
+        // Record some information for proper SAM Annotation.
+        //
+        allReadAlignments.Resize(1);
+        allReadAlignments.AddAlignmentsForSeq(0, selectedAlignmentPtrs);
+        if (params.useCcsOnly) {
+            allReadAlignments.alignMode = CCSDeNovo;
+        }
+        else {
+            allReadAlignments.alignMode = Fullread;
+        }
+        allReadAlignments.SetSequence(0, smrtRead);
+    }
+    else if (readIsCCS) { // if -useccsall or -useccs 
+        // Flank alignment candidates to both ends.
+        for(int alignmentIndex = 0; alignmentIndex < selectedAlignmentPtrs.size(); 
+                alignmentIndex++) {
+            FlankTAlignedSeq(selectedAlignmentPtrs[alignmentIndex],
+                    seqdb, genome, params.flankSize);
+        }
+
+        //
+        // Align the ccs subread to where the denovo sequence mapped (explode).
+        //
+        CCSIterator ccsIterator;
+        FragmentCCSIterator fragmentCCSIterator;
+        CCSIterator *subreadIterator;
+
+        //
+        // Choose a different iterator over subreads depending on the
+        // alignment mode.  When the mode is allpass, include the
+        // framgents that are not necessarily full pass.
+        //
+        if (params.useAllSubreadsInCcs) {
+            // 
+            // Use all subreads even if they are not full pass
+            fragmentCCSIterator.Initialize(&ccsRead, mapData->regionTablePtr);
+            subreadIterator = &fragmentCCSIterator;
+            allReadAlignments.alignMode = CCSAllPass;
+        }
+        else {
+            // Use only full pass reads.
+            ccsIterator.Initialize(&ccsRead);
+            subreadIterator = &ccsIterator;
+            allReadAlignments.alignMode = CCSFullPass;
+        }
+
+        allReadAlignments.Resize(subreadIterator->GetNumPasses());
+
+        int passDirection, passStartBase, passNumBases;
+        SMRTSequence subread;
+
+        //
+        // The read was previously set to the smrtRead, which was the
+        // de novo ccs sequence.  Since the alignments of exploded
+        // reads are reported, the unrolled read should be used as the
+        // reference when printing.
+        //
+        allReadAlignments.read = ccsRead.unrolledRead;
+        subreadIterator->Reset();
+        int subreadIndex;
+
+        //
+        // Realign all subreads to selected reference locations.
+        //
+        for (subreadIndex = 0; subreadIndex < subreadIterator->GetNumPasses(); subreadIndex++) {
+            int retval = subreadIterator->GetNext(passDirection, passStartBase, passNumBases);
+            assert(retval == 1);
+            if (passNumBases <= params.minReadLength) { continue; }
+
+            ReadInterval subreadInterval(passStartBase, passStartBase + passNumBases);
+
+            subread.ReferenceSubstring(ccsRead.unrolledRead, passStartBase, passNumBases-1);
+            subread.CopyTitle(ccsRead.title);
+            // The unrolled alignment should be relative to the entire read.
+            allReadAlignments.SetSequence(subreadIndex, ccsRead.unrolledRead);
+
+            int alignmentIndex;
+            //
+            // Align this subread to all the positions that the de novo
+            // sequence has aligned to.
+            //
+            for (alignmentIndex = 0; alignmentIndex < selectedAlignmentPtrs.size(); alignmentIndex++) {
+                T_AlignmentCandidate *alignment = selectedAlignmentPtrs[alignmentIndex];
+                if (alignment->score > params.maxScore) break;
+                AlignSubreadToAlignmentTarget(allReadAlignments,
+                        subread, ccsRead.unrolledRead, 
+                        alignment,
+                        passDirection,
+                        subreadInterval,
+                        subreadIndex,
+                        params, mappingBuffers, threadOut);
+            } // End of aligning this subread to where the de novo ccs has aligned to.
+            subread.Free();
+        } // End of alignining all subreads to where the de novo ccs has aligned to.
+    } // End of if readIsCCS and !params.useCcsOnly 
+
+    // Fix for memory leakage due to undeleted Alignment Candidate objectts not selected
+    // for printing
+    // delete all AC which are in complement of SelectedAlignmemntPtrs vector
+    // namely (SelectedAlignmentPtrs/alignmentPtrs)
+    for (int ii = 0; ii < alignmentPtrs.size(); ii++)
+    {
+        int found =0;
+        for (int jj = 0; jj < selectedAlignmentPtrs.size(); jj++)
+        {
+            if (alignmentPtrs[ii] == selectedAlignmentPtrs[jj] )
+            {
+                found = 1;
+                break;
+            }
+        }
+        if (found == 0) delete alignmentPtrs[ii];
+    }
+
+}
 
 void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData)
 { 
@@ -83,7 +697,6 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData)
     DNASuffixArray sarray;
     TupleCountTable<T_GenomeSequence, DNATuple> ct;
     SequenceIndexDatabase<FASTQSequence> seqdb;
-    FASTQSequence fastaGenome;
     T_GenomeSequence    genome;
     BWT *bwtPtr;
 
@@ -117,110 +730,20 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData)
     //
     MappingBuffers mappingBuffers;
     while (true) {
+        // Fetch reads from a zmw
         bool readIsCCS = false;
-        //
-        // Scan the next read from input.  This may either be a CCS read,
-        // or regular read (though this may be aligned in whole, or by
-        // subread).
-        //
         AlignmentContext alignmentContext;
         // Associate each sequence to read in with a determined random int.
         int associatedRandInt = 0;
-        if (mapData->reader->GetFileType() == HDFCCS ||
-                mapData->reader->GetFileType() == HDFCCSONLY) { 
-            if (GetNextReadThroughSemaphore(*mapData->reader, params, ccsRead, alignmentContext, associatedRandInt, semaphores) == false) {
-                break;
-            }
-            else {
-                readIsCCS = true;
-                smrtRead.Copy(ccsRead);
-                ccsRead.SetQVScale(params.qvScaleType);
-                smrtRead.SetQVScale(params.qvScaleType);
-            }
-            assert(ccsRead.zmwData.holeNumber == smrtRead.zmwData.holeNumber and
-                    ccsRead.zmwData.holeNumber == ccsRead.unrolledRead.zmwData.holeNumber);
-        } else {
-            if (GetNextReadThroughSemaphore(*mapData->reader, params, smrtRead, alignmentContext, associatedRandInt, semaphores) == false) {
-                break;
-            }
-            else {
-                smrtRead.SetQVScale(params.qvScaleType);
-            }
-        }
-
-        //
-        // Only normal (non-CCS) reads should be masked.  Since CCS reads store the raw read, that is masked.
-        //
-        bool readHasGoodRegion = true;
-        if (params.useRegionTable and params.useHQRegionTable) {
-            if (readIsCCS) {
-                readHasGoodRegion = MaskRead(ccsRead.unrolledRead, ccsRead.unrolledRead.zmwData, *mapData->regionTablePtr);       
-            }
-            else {
-                readHasGoodRegion = MaskRead(smrtRead, smrtRead.zmwData, *mapData->regionTablePtr);
-            }
-            //
-            // Store the high quality start and end of this read for masking purposes when printing.
-            //
-            int hqStart, hqEnd;
-            int score;
-            LookupHQRegion(smrtRead.zmwData.holeNumber, *mapData->regionTablePtr, hqStart, hqEnd, score);
-            smrtRead.lowQualityPrefix = hqStart;
-            smrtRead.lowQualitySuffix = smrtRead.length - hqEnd;
-            smrtRead.highQualityRegionScore = score;
-        }
-        else {
-            smrtRead.lowQualityPrefix = 0;
-            smrtRead.lowQualitySuffix = 0;
-        }
-
-        //
-        // Give the opportunity to align a subset of reads.
-        //
-        if (readHasGoodRegion == false or 
-                (params.holeNumberRangesStr.size() > 0 and
-                 not params.holeNumberRanges.contains(smrtRead.zmwData.holeNumber))) {
-            //
-            // Nothing to do with this read. Skip aligning it entirely.
-            //
-            if (readIsCCS) {
-                ccsRead.Free();
-            }
-            smrtRead.Free();
-            // Stop processing once the specified zmw hole number is reached.
-            // Eventually this will change to just seek to hole number, and
-            // just align one read anyway.
-            if (params.holeNumberRangesStr.size() > 0 and 
-                    smrtRead.zmwData.holeNumber > params.holeNumberRanges.max()){
-                break;
-            }
-            continue;
-        }
-
-
-        // 
-        // Discard reads that are too small, or not labeled as having any
-        // useable/good sequence. 
-        //
-        if (smrtRead.length < UInt(params.minReadLength) or readHasGoodRegion == false or 
-                smrtRead.highQualityRegionScore < params.minRawSubreadScore or 
-                (params.maxReadLength != 0 and 
-                 smrtRead.length > UInt(params.maxReadLength))) {
-            if (readIsCCS) {
-                ccsRead.Free();
-            }
-            smrtRead.Free();
-            continue;
-        }
-
-        if (smrtRead.qual.Empty() == false and smrtRead.GetAverageQuality() < params.minAvgQual) {
-            if (readIsCCS) {
-                ccsRead.Free();
-            }
-            smrtRead.Free();
-            continue;
-        }
-
+        bool stop = false;
+        bool readsOK = FetchReads(mapData->reader, mapData->regionTablePtr,
+                                  smrtRead, ccsRead,
+                                  params, readIsCCS, 
+                                  alignmentContext.readGroupId,
+                                  associatedRandInt, stop);
+        if (stop) break;
+        if (not readsOK) continue;
+        
         if (params.verbosity > 1) {
             cout << "aligning read: " << endl;
             smrtRead.PrintSeq(cout);
@@ -233,454 +756,24 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData)
         }
 
         //
-        // When aligning subreads separately, iterate over each subread, and print the alignments for these.
+        // When aligning subreads separately, iterate over each subread, and
+        // print the alignments for these.
         //
-
         ReadAlignments allReadAlignments;
         allReadAlignments.read = smrtRead;
 
         if (readIsCCS == false and params.mapSubreadsSeparately) {
             // (not readIsCCS and not -noSplitSubreads)
-            vector<ReadInterval> subreadIntervals;
-            vector<int>          subreadDirections;
-            vector<ReadInterval> adapterIntervals; 
-            //
-            // Determine endpoints of this subread in the main read.
-            //
-            if (params.useRegionTable == false) {
-                //
-                // When there is no region table, the subread is the entire
-                // read.
-                //
-                ReadInterval wholeRead(0, smrtRead.length);
-                // The set of subread intervals is just the entire read.
-                subreadIntervals.push_back(wholeRead);
-            }
-            else {
-                // 
-                // Grab the subread & adapter intervals from the entire region table to
-                // iterate over.
-                //
-                assert(mapData->regionTablePtr->HasHoleNumber(smrtRead.HoleNumber())); 
-                subreadIntervals = (*(mapData->regionTablePtr))[smrtRead.HoleNumber()].SubreadIntervals(smrtRead.length, params.byAdapter);
-                adapterIntervals = (*(mapData->regionTablePtr))[smrtRead.HoleNumber()].AdapterIntervals();
-            }
-
-            // The assumption is that neighboring subreads must have the opposite 
-            // directions. So create directions for subread intervals with
-            // interleaved 0s and 1s.
-            CreateDirections(subreadDirections, subreadIntervals.size());
-
-            //
-            // Trim the boundaries of subread intervals so that only high quality
-            // regions are included in the intervals, not N's. Remove intervals
-            // and their corresponding dirctions, if they are shorter than the 
-            // user specified minimum read length or do not intersect with hq 
-            // region at all. Finally, return index of the (left-most) longest
-            // subread in the updated vector.
-            //
-            int longestSubreadIndex = GetHighQualitySubreadsIntervals(
-                    subreadIntervals, // a vector of subread intervals.
-                    subreadDirections, // a vector of subread directions.
-                    smrtRead.lowQualityPrefix, // hq region start pos.
-                    smrtRead.length - smrtRead.lowQualitySuffix, // hq end pos.
-                    params.minSubreadLength); // minimum read length.
-
-            int bestSubreadIndex = longestSubreadIndex;
-            if (params.concordantTemplate == "longestsubread") {
-                // Use the (left-most) longest full-pass subread as 
-                // template for concordant mapping
-                int longestFullSubreadIndex = GetLongestFullSubreadIndex(
-                        subreadIntervals, adapterIntervals);
-                if (longestFullSubreadIndex >= 0) {
-                    bestSubreadIndex = longestFullSubreadIndex;
-                }
-            } else if (params.concordantTemplate == "typicalsubread") {
-                // Use the 'typical' full-pass subread as template for
-                // concordant mapping.
-                int typicalFullSubreadIndex = GetTypicalFullSubreadIndex(
-                        subreadIntervals, adapterIntervals);
-                if (typicalFullSubreadIndex >= 0) {
-                    bestSubreadIndex = typicalFullSubreadIndex;
-                }
-            } else if (params.concordantTemplate == "mediansubread") {
-                // Use the 'median-length' full-pass subread as template for
-                // concordant mapping.
-                int medianFullSubreadIndex = GetMedianLengthFullSubreadIndex(
-                        subreadIntervals, adapterIntervals);
-                if (medianFullSubreadIndex >= 0) {
-                    bestSubreadIndex = medianFullSubreadIndex;
-                }
-            } else {
-                assert(false);
-            }
-
-            // Flop all directions if direction of the longest subread is 1.
-            if (bestSubreadIndex >= 0 and 
-                    bestSubreadIndex < int(subreadDirections.size()) and
-                    subreadDirections[bestSubreadIndex] == 1) {
-                UpdateDirections(subreadDirections, true);
-            }
-
-            int startIndex = 0;
-            int endIndex = subreadIntervals.size();
-
-            if (params.concordant) {
-                // Only the longest subread will be aligned in the first round.
-                startIndex = max(startIndex, bestSubreadIndex);
-                endIndex   = min(endIndex, bestSubreadIndex + 1);
-            }
-
-            //
-            // Make room for alignments.
-            //
-            allReadAlignments.Resize(subreadIntervals.size());
-            allReadAlignments.alignMode = Subread;
-
-            DNALength intvIndex;
-            for (intvIndex = startIndex; intvIndex < endIndex; intvIndex++) {
-                SMRTSequence subreadSequence, subreadSequenceRC;
-                MakeSubreadOfInterval(subreadSequence, smrtRead, 
-                        subreadIntervals[intvIndex], params);
-                MakeSubreadRC(subreadSequenceRC, subreadSequence, smrtRead);
-
-                //
-                // Store the sequence that is being mapped in case no hits are
-                // found, and missing sequences are printed.
-                //
-                allReadAlignments.SetSequence(intvIndex, subreadSequence);
-
-                vector<T_AlignmentCandidate*> alignmentPtrs;
-                mapData->metrics.numReads++;
-
-                assert(subreadSequence.zmwData.holeNumber == smrtRead.zmwData.holeNumber);
-
-                //
-                // Try default and fast parameters to map the read.
-                //
-                MapRead(subreadSequence, subreadSequenceRC, 
-                        genome,           // possibly multi fasta file read into one sequence
-                        sarray, *bwtPtr,  // The suffix array, and the bwt-fm index structures
-                        seqBoundary,      // Boundaries of contigs in the
-                        // genome, alignments do not span
-                        // the ends of boundaries.
-                        ct,               // Count table to use word frequencies in the genome to weight matches.
-                        seqdb,            // Information about the names of
-                        // chromosomes in the genome, and
-                        // where their sequences are in the genome.
-                        params,           // A huge list of parameters for
-                        // mapping, only compile/command
-                        // line values set.
-                        mapData->metrics, // Keep track of time/ hit counts,
-                        // etc.. Not fully developed, but
-                        // should be.
-                        alignmentPtrs,    // Where the results are stored.
-                        mappingBuffers,   // A class of buffers for structurs
-                        // like dyanmic programming
-                        // matrices, match lists, etc., that are not
-                        // reallocated between calls to
-                        // MapRead.  They are cleared though.
-                        mapData,          // Some values that are shared
-                            // across threads.
-                        semaphores);
-
-                //
-                // No alignments were found, sometimes parameters are
-                // specified to try really hard again to find an alignment.
-                // This sets some parameters that use a more sensitive search
-                // at the cost of time.
-                //
-
-                if ((alignmentPtrs.size() == 0 or alignmentPtrs[0]->pctSimilarity < 80) and params.doSensitiveSearch) {
-                    MappingParameters sensitiveParams = params;
-                    sensitiveParams.SetForSensitivity();
-                    MapRead(subreadSequence, subreadSequenceRC, genome, 
-                            sarray, *bwtPtr, 
-                            seqBoundary, ct, seqdb,
-                            sensitiveParams, mapData->metrics, 
-                            alignmentPtrs, mappingBuffers, 
-                            mapData,
-                            semaphores);
-                }
-
-                //
-                // Store the mapping quality values.
-                //
-                if (alignmentPtrs.size() > 0 and 
-                        alignmentPtrs[0]->score < params.maxScore and 
-                        params.storeMapQV) {
-                    StoreMapQVs(subreadSequence, alignmentPtrs, params);
-                }
-
-                // 
-                // Select alignments for this subread.
-                //
-                vector<T_AlignmentCandidate*> selectedAlignmentPtrs =
-                    SelectAlignmentsToPrint(alignmentPtrs, params, 
-                            associatedRandInt);
-                allReadAlignments.AddAlignmentsForSeq(intvIndex, selectedAlignmentPtrs);
-
-                //
-                // Move reference from subreadSequence, which will be freed at
-                // the end of this loop to the smrtRead, which exists for the
-                // duration of aligning all subread of the smrtRead.
-                //
-                for (size_t a = 0; a < alignmentPtrs.size(); a++) {
-                    if (alignmentPtrs[a]->qStrand == 0) {
-                        alignmentPtrs[a]->qAlignedSeq.ReferenceSubstring(smrtRead,
-                                alignmentPtrs[a]->qAlignedSeq.seq - subreadSequence.seq,
-                                alignmentPtrs[a]->qAlignedSeqLength);
-                    }
-                    else {
-                        alignmentPtrs[a]->qAlignedSeq.ReferenceSubstring(smrtReadRC,
-                                alignmentPtrs[a]->qAlignedSeq.seq - subreadSequenceRC.seq, 
-                                alignmentPtrs[a]->qAlignedSeqLength);
-                    }
-                }
-                // Fix for memory leakage bug due to undeleted Alignment Candidate objectts which wasn't selected
-                // for printing
-                // delete all AC which are in complement of SelectedAlignmemntPtrs vector
-                // namely (SelectedAlignmentPtrs/alignmentPtrs)
-                for (int ii = 0; ii < alignmentPtrs.size(); ii++)
-                {
-                    int found =0;
-                    for (int jj = 0; jj < selectedAlignmentPtrs.size(); jj++)
-                    {
-                        if (alignmentPtrs[ii] == selectedAlignmentPtrs[jj] )
-                        {
-                            found = 1;
-                            break;
-                        }
-                    }
-                    if (found == 0) delete alignmentPtrs[ii];
-                }
-                subreadSequence.Free();
-                subreadSequenceRC.Free();
-            } // End of looping over subread intervals within [startIndex, endIndex).
-
-            if (params.verbosity >= 3) 
-                allReadAlignments.Print(threadOut);
-
-            if (params.concordant) {
-                allReadAlignments.read = smrtRead;
-                allReadAlignments.alignMode = ZmwSubreads;
-
-                if (startIndex >= 0 && 
-                        startIndex < int(allReadAlignments.subreadAlignments.size())) {
-                    vector<T_AlignmentCandidate*> selectedAlignmentPtrs =
-                        allReadAlignments.CopySubreadAlignments(startIndex);
-
-                    for(int alignmentIndex = 0; alignmentIndex < int(selectedAlignmentPtrs.size()); 
-                            alignmentIndex++) {
-                        FlankTAlignedSeq(selectedAlignmentPtrs[alignmentIndex], 
-                                seqdb, genome, params.flankSize);
-                    }
-
-                    for (intvIndex = 0; intvIndex < subreadIntervals.size(); intvIndex++) {
-                        if (intvIndex == startIndex) continue; 
-                        int passDirection = subreadDirections[intvIndex];
-                        int passStartBase = subreadIntervals[intvIndex].start;
-                        int passNumBases  = subreadIntervals[intvIndex].end - passStartBase;
-                        if (passNumBases <= params.minReadLength) {continue;}
-
-                        mapData->metrics.numReads++;
-                        SMRTSequence subread;
-                        subread.ReferenceSubstring(smrtRead, passStartBase, passNumBases);
-                        subread.CopyTitle(smrtRead.title);
-                        // The unrolled alignment should be relative to the entire read.
-                        if (params.clipping == SAMOutput::subread) {
-                            SMRTSequence maskedSubread;
-                            MakeSubreadOfInterval(maskedSubread, smrtRead,
-                                    subreadIntervals[intvIndex], params);
-                            allReadAlignments.SetSequence(intvIndex, maskedSubread);
-                            maskedSubread.Free();
-                        } else {
-                            allReadAlignments.SetSequence(intvIndex, smrtRead);
-                        }
-
-                        for (int alnIndex = 0; alnIndex < selectedAlignmentPtrs.size(); alnIndex++) {
-                            T_AlignmentCandidate * alignment = selectedAlignmentPtrs[alnIndex];
-                            if (alignment->score > params.maxScore) break;
-                            AlignSubreadToAlignmentTarget(allReadAlignments, 
-                                    subread,
-                                    smrtRead,
-                                    alignment,
-                                    passDirection, 
-                                    subreadIntervals[intvIndex],
-                                    intvIndex,
-                                    params, mappingBuffers, threadOut);
-                            if (params.concordantAlignBothDirections) {
-                                AlignSubreadToAlignmentTarget(allReadAlignments, 
-                                        subread, 
-                                        smrtRead, 
-                                        alignment,
-                                        ((passDirection==0)?1:0),
-                                        subreadIntervals[intvIndex], 
-                                        intvIndex,
-                                        params, mappingBuffers, threadOut);
-                            }
-                        } // End of aligning this subread to each selected alignment.
-                        subread.Free();
-                    } // End of aligning each subread to where the template subread aligned to. 
-                    for(int alignmentIndex = 0; alignmentIndex < selectedAlignmentPtrs.size(); 
-                            alignmentIndex++) {
-                        if (selectedAlignmentPtrs[alignmentIndex]) 
-                            delete selectedAlignmentPtrs[alignmentIndex];
-                    }
-                } // End of if startIndex >= 0 and < subreadAlignments.size()
-            } // End of if params.concordant
-        } // End of if (readIsCCS == false and params.mapSubreadsSeparately).
+            MapReadsNonCCS(mapData, mappingBuffers, 
+                           smrtRead, smrtReadRC, ccsRead, 
+                           params, associatedRandInt,
+                           allReadAlignments, threadOut);
+       } // End of if (readIsCCS == false and params.mapSubreadsSeparately).
         else { // if (readIsCCS or (not readIsCCS and -noSplitSubreads) )
-            //
-            // The read must be mapped as a whole, even if it contains subreads.
-            //
-            vector<T_AlignmentCandidate*> alignmentPtrs;
-            mapData->metrics.numReads++;
-            smrtRead.SubreadStart(0).SubreadEnd(smrtRead.length);
-            smrtReadRC.SubreadStart(0).SubreadEnd(smrtRead.length);
-
-            MapRead(smrtRead, smrtReadRC, 
-                    genome, sarray, *bwtPtr, seqBoundary, ct, seqdb, params, mapData->metrics,
-                    alignmentPtrs, mappingBuffers, mapData, semaphores);
-
-            //
-            // Store the mapping quality values.
-            //
-            if (alignmentPtrs.size() > 0 and 
-                    alignmentPtrs[0]->score < params.maxScore and 
-                    params.storeMapQV) {
-                StoreMapQVs(smrtRead, alignmentPtrs, params);
-            }
-
-            // 
-            // Select de novo ccs-reference alignments for subreads to align to.
-            //
-            vector<T_AlignmentCandidate*> selectedAlignmentPtrs =
-                SelectAlignmentsToPrint(alignmentPtrs, params, associatedRandInt);
-
-            //
-            // Just one sequence is aligned.  There is one primary hit, and
-            // all other are secondary.
-            //
-
-            if (readIsCCS == false or params.useCcsOnly) {
-                // if -noSplitSubreads or -useccsdenovo.
-                //
-                // Record some information for proper SAM Annotation.
-                //
-                allReadAlignments.Resize(1);
-                allReadAlignments.AddAlignmentsForSeq(0, selectedAlignmentPtrs);
-                if (params.useCcsOnly) {
-                    allReadAlignments.alignMode = CCSDeNovo;
-                }
-                else {
-                    allReadAlignments.alignMode = Fullread;
-                }
-                allReadAlignments.SetSequence(0, smrtRead);
-            }
-            else if (readIsCCS) { // if -useccsall or -useccs 
-                // Flank alignment candidates to both ends.
-                for(int alignmentIndex = 0; alignmentIndex < selectedAlignmentPtrs.size(); 
-                        alignmentIndex++) {
-                    FlankTAlignedSeq(selectedAlignmentPtrs[alignmentIndex],
-                            seqdb, genome, params.flankSize);
-                }
-
-                //
-                // Align the ccs subread to where the denovo sequence mapped (explode).
-                //
-                SMRTSequence readRC;
-
-                CCSIterator ccsIterator;
-                FragmentCCSIterator fragmentCCSIterator;
-                CCSIterator *subreadIterator;
-
-                //
-                // Choose a different iterator over subreads depending on the
-                // alignment mode.  When the mode is allpass, include the
-                // framgents that are not necessarily full pass.
-                //
-                if (params.useAllSubreadsInCcs) {
-                    // 
-                    // Use all subreads even if they are not full pass
-                    fragmentCCSIterator.Initialize(&ccsRead, mapData->regionTablePtr);
-                    subreadIterator = &fragmentCCSIterator;
-                    allReadAlignments.alignMode = CCSAllPass;
-                }
-                else {
-                    // Use only full pass reads.
-                    ccsIterator.Initialize(&ccsRead);
-                    subreadIterator = &ccsIterator;
-                    allReadAlignments.alignMode = CCSFullPass;
-                }
-
-                allReadAlignments.Resize(subreadIterator->GetNumPasses());
-
-                int passDirection, passStartBase, passNumBases;
-                SMRTSequence subread;
-
-                //
-                // The read was previously set to the smrtRead, which was the
-                // de novo ccs sequence.  Since the alignments of exploded
-                // reads are reported, the unrolled read should be used as the
-                // reference when printing.
-                //
-                allReadAlignments.read = ccsRead.unrolledRead;
-                subreadIterator->Reset();
-                int subreadIndex;
-
-                //
-                // Realign all subreads to selected reference locations.
-                //
-                for (subreadIndex = 0; subreadIndex < subreadIterator->GetNumPasses(); subreadIndex++) {
-                    int retval = subreadIterator->GetNext(passDirection, passStartBase, passNumBases);
-                    assert(retval == 1);
-                    if (passNumBases <= params.minReadLength) { continue; }
-
-                    ReadInterval subreadInterval(passStartBase, passStartBase + passNumBases);
-
-                    subread.ReferenceSubstring(ccsRead.unrolledRead, passStartBase, passNumBases-1);
-                    subread.CopyTitle(ccsRead.title);
-                    // The unrolled alignment should be relative to the entire read.
-                    allReadAlignments.SetSequence(subreadIndex, ccsRead.unrolledRead);
-
-                    int alignmentIndex;
-                    //
-                    // Align this subread to all the positions that the de novo
-                    // sequence has aligned to.
-                    //
-                    for (alignmentIndex = 0; alignmentIndex < selectedAlignmentPtrs.size(); alignmentIndex++) {
-                        T_AlignmentCandidate *alignment = selectedAlignmentPtrs[alignmentIndex];
-                        if (alignment->score > params.maxScore) break;
-                        AlignSubreadToAlignmentTarget(allReadAlignments,
-                                subread, ccsRead.unrolledRead, 
-                                alignment,
-                                passDirection,
-                                subreadInterval,
-                                subreadIndex,
-                                params, mappingBuffers, threadOut);
-                    } // End of aligning this subread to where the de novo ccs has aligned to.
-                    subread.Free();
-                } // End of alignining all subreads to where the de novo ccs has aligned to.
-            } // End of if readIsCCS and !params.useCcsOnly 
-
-            // Fix for memory leakage due to undeleted Alignment Candidate objectts not selected
-            // for printing
-            // delete all AC which are in complement of SelectedAlignmemntPtrs vector
-            // namely (SelectedAlignmentPtrs/alignmentPtrs)
-            for (int ii = 0; ii < alignmentPtrs.size(); ii++)
-            {
-                int found =0;
-                for (int jj = 0; jj < selectedAlignmentPtrs.size(); jj++)
-                {
-                    if (alignmentPtrs[ii] == selectedAlignmentPtrs[jj] )
-                    {
-                        found = 1;
-                        break;
-                    }
-                }
-                if (found == 0) delete alignmentPtrs[ii];
-            }
+            MapReadsCCS(mapData, mappingBuffers, 
+                        smrtRead, smrtReadRC, ccsRead,
+                        readIsCCS, params, associatedRandInt,
+                        allReadAlignments, threadOut);
         } // End of if not (readIsCCS == false and params.mapSubreadsSeparately) 
 
         PrintAllReadAlignments(allReadAlignments, alignmentContext,

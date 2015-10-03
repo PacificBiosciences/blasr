@@ -42,7 +42,7 @@ template<typename T_Sequence>
 bool GetNextReadThroughSemaphore(ReaderAgglomerate &reader, 
                                  MappingParameters &params,
                                  T_Sequence &read, 
-                                 AlignmentContext &context, 
+                                 string & readGroupId, 
                                  int & associatedRandInt,
                                  MappingSemaphores & semaphores)
 {
@@ -68,7 +68,7 @@ bool GetNextReadThroughSemaphore(ReaderAgglomerate &reader,
     // Set the read group id before releasing the semaphore, since other
     // threads may change the reader object to a new read group before
     // sending this alignment out to printing. 
-    context.readGroupId = reader.readGroupId;
+    readGroupId = reader.readGroupId;
 
     if (params.nProc > 1) {
 #ifdef __APPLE__
