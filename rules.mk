@@ -1,4 +1,5 @@
 INCDIRS := \
+	${BLASR_INC} \
 	${LIBBLASR_INC} \
 	${LIBPBDATA_INC} \
 	${LIBPBIHDF_INC} \
