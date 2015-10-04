@@ -565,6 +565,52 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
     AssignRefContigLocations(alignmentPtrs, seqdb, genome);
 }
 
+template<typename T_Sequence>
+void MapRead(T_Sequence &read, T_Sequence &readRC,
+             vector<T_AlignmentCandidate*> &alignmentPtrs, 
+             MappingBuffers &mappingBuffers,
+             MappingIPC *mapData,
+             MappingSemaphores & semaphores) 
+{
+    DNASuffixArray sarray;
+    TupleCountTable<T_GenomeSequence, DNATuple> ct;
+    SequenceIndexDatabase<FASTQSequence> seqdb;
+    T_GenomeSequence    genome;
+    BWT *bwtPtr = mapData->bwtPtr;
+    mapData->ShallowCopySuffixArray(sarray);
+    mapData->ShallowCopyReferenceSequence(genome);
+    mapData->ShallowCopySequenceIndexDatabase(seqdb);
+    mapData->ShallowCopyTupleCountTable(ct);
+    SeqBoundaryFtr<FASTQSequence> seqBoundary(&seqdb);
+
+    return 
+        MapRead(read, readRC,
+                genome,           // possibly multi fasta file read into one sequence
+                sarray, *bwtPtr,  // The suffix array, and the bwt-fm index structures
+                seqBoundary,      // Boundaries of contigs in the
+                // genome, alignments do not span
+                // the ends of boundaries.
+                ct,               // Count table to use word frequencies in the genome to weight matches.
+                seqdb,            // Information about the names of
+                // chromosomes in the genome, and
+                // where their sequences are in the genome.
+                mapData->params,// A huge list of parameters for
+                // mapping, only compile/command
+                // line values set.
+                mapData->metrics, // Keep track of time/ hit counts,
+                // etc.. Not fully developed, but
+                // should be.
+                alignmentPtrs,    // Where the results are stored.
+                mappingBuffers,   // A class of buffers for structurs
+                // like dyanmic programming
+                // matrices, match lists, etc., that are not
+                // reallocated between calls to
+                // MapRead.  They are cleared though.
+                mapData,          // Some values that are shared
+                // across threads.
+                semaphores);
+}
+
 template<typename T_TargetSequence, typename T_QuerySequence, typename TDBSequence>
 void AlignIntervals(T_TargetSequence &genome, T_QuerySequence &read, T_QuerySequence &rcRead,
         WeightedIntervalSet &weightedIntervals,

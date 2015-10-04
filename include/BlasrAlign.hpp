@@ -54,6 +54,14 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
              MappingBuffers &mappingBuffers,
              MappingIPC *mapData,
              MappingSemaphores & semaphores);
+
+template<typename T_Sequence>
+void MapRead(T_Sequence &read, T_Sequence &readRC,
+             vector<T_AlignmentCandidate*> &alignmentPtrs, 
+             MappingBuffers &mappingBuffers,
+             MappingIPC *mapData,
+             MappingSemaphores & semaphores);
+
 /*
 void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData);
 */
