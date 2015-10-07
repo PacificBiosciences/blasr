@@ -85,6 +85,13 @@ void MakeSubreadRC(SMRTSequence & subreadSequenceRC,
 void MakeVirtualRead(SMRTSequence & smrtRead, 
                      const vector<SMRTSequence> & subreads);
 
+// Construct subreads invervals from subreads
+void MakeSubreadIntervals(vector<SMRTSequence> & subreads,
+                          vector<ReadInterval> & subreadIntervals);
+
+// Get index of median length interval
+int GetIndexOfMedian(const vector<ReadInterval> & subreadIntervals);
+
 //-------------------------MISC-----------------------------------//
 int CountZero(unsigned char *ptr, int length);
 
