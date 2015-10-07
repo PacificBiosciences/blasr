@@ -191,6 +191,19 @@ void MakePrimaryIntervals(RegionTable * regionTablePtr,
     }
 }
 
+// Make primary intervals (which are intervals of subreads to align
+// in the first round) for BAM file, -concordant, 
+void MakePrimaryIntervals(vector<SMRTSequence> & subreads,
+                          vector<ReadInterval> & subreadIntervals,
+                          vector<int> & subreadDirections,
+                          int & bestSubreadIndex,
+                          MappingParameters & params)
+{
+    MakeSubreadIntervals(subreads, subreadIntervals);
+    CreateDirections(subreadDirections, subreadIntervals.size());
+    bestSubreadIndex = GetIndexOfMedian(subreadIntervals);
+}
+
 
 /// Scan the next read from input.  This may either be a CCS read,
 /// or regular read (though this may be aligned in whole, or by
@@ -300,6 +313,7 @@ void MapReadsNonCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapDa
                     SMRTSequence & smrtRead, 
                     SMRTSequence & smrtReadRC, 
                     CCSSequence & ccsRead,  
+                    vector<SMRTSequence> & subreads,
                     MappingParameters & params,
                     const int & associatedRandInt,
                     ReadAlignments & allReadAlignments,
@@ -324,9 +338,15 @@ void MapReadsNonCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapDa
     vector<int>          subreadDirections;
     int bestSubreadIndex;
     
-    MakePrimaryIntervals(mapData->regionTablePtr, smrtRead,
-                         subreadIntervals, subreadDirections,
-                         bestSubreadIndex, params);
+    if (mapData->reader->GetFileType() != BAM or not params.concordant) {
+        MakePrimaryIntervals(mapData->regionTablePtr, smrtRead,
+                             subreadIntervals, subreadDirections,
+                             bestSubreadIndex, params);
+    } else {
+        MakePrimaryIntervals(subreads, 
+                             subreadIntervals, subreadDirections,
+                             bestSubreadIndex, params);
+    }
  
     // Flop all directions if direction of the longest subread is 1.
     if (bestSubreadIndex >= 0 and 
@@ -798,7 +818,7 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData)
         if (readIsCCS == false and params.mapSubreadsSeparately) {
             // (not readIsCCS and not -noSplitSubreads)
             MapReadsNonCCS(mapData, mappingBuffers, 
-                           smrtRead, smrtReadRC, ccsRead, 
+                           smrtRead, smrtReadRC, ccsRead, subreads,
                            params, associatedRandInt,
                            allReadAlignments, threadOut);
        } // End of if (readIsCCS == false and params.mapSubreadsSeparately).
