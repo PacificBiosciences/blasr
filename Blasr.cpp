@@ -207,7 +207,6 @@ void MakePrimaryIntervals(RegionTable * regionTablePtr,
 ///              alignments regardless of nproc.
 /// \params[out] stop: whether or not stop mapping remaining reads.
 /// \returns whether or not to skip mapping reads of this zmw.
-
 bool FetchReads(ReaderAgglomerate * reader,
                 RegionTable * regionTablePtr,
                 SMRTSequence & smrtRead, 
@@ -244,7 +243,6 @@ bool FetchReads(ReaderAgglomerate * reader,
             }
         }
 
-        if (not IsGoodRead(smrtRead, params, stop) or stop) return false;
         //
         // Only normal (non-CCS) reads should be masked.  Since CCS reads store the raw read, that is masked.
         //
@@ -270,6 +268,9 @@ bool FetchReads(ReaderAgglomerate * reader,
             smrtRead.lowQualityPrefix = 0;
             smrtRead.lowQualitySuffix = 0;
         }
+
+        if (not IsGoodRead(smrtRead, params, stop) or stop) return false;
+
         return readHasGoodRegion;
     } else {
         subreads.clear();
@@ -278,14 +279,19 @@ bool FetchReads(ReaderAgglomerate * reader,
             stop = true;
             return false;
         }
-        assert(reads.size() != 0); //  GetNextReadThroughSemaphor should have returned false
 
         for (const SMRTSequence & smrtRead: reads) {
             if (IsGoodRead(smrtRead, params, stop)) {
                 subreads.push_back(smrtRead);
             }
         }
-        return true;
+        if (subreads.size() != 0) {
+            MakeVirtualRead(smrtRead, subreads);
+            return true;
+        }
+        else {
+            return false;
+        }
     }
 }
 
@@ -317,6 +323,7 @@ void MapReadsNonCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapDa
     vector<ReadInterval> subreadIntervals;
     vector<int>          subreadDirections;
     int bestSubreadIndex;
+    
     MakePrimaryIntervals(mapData->regionTablePtr, smrtRead,
                          subreadIntervals, subreadDirections,
                          bestSubreadIndex, params);
