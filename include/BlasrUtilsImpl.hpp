@@ -1142,6 +1142,7 @@ void PrintAllReadAlignments(ReadAlignments & allReadAlignments,
                             ostream & unalignedFilePtr,
                             MappingParameters & params,
 #ifdef USE_PBBAM
+                            vector<SMRTSequence> & subreads,
                             PacBio::BAM::BamWriter * bamWriterPtr,
 #endif
                             MappingSemaphores & semaphores)
@@ -1177,10 +1178,13 @@ void PrintAllReadAlignments(ReadAlignments & allReadAlignments,
       alignmentContext.rNext = "";
       alignmentContext.hasNextSubreadPos = false;
     }
-      
+    SMRTSequence & sourceSubread = allReadAlignments.subreads[subreadIndex];
+    if (subreads.size() == allReadAlignments.subreads.size()) {
+        sourceSubread = subreads[subreadIndex];
+    }
     if (allReadAlignments.subreadAlignments[subreadIndex].size() > 0) {
         PrintAlignments(allReadAlignments.subreadAlignments[subreadIndex], 
-                        allReadAlignments.subreads[subreadIndex], // the source read
+                        sourceSubread,
                         // for these alignments
                         params, outFilePtr,//*mapData->outFilePtr,
                         alignmentContext, 
