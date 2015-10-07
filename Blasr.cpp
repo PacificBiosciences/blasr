@@ -1396,9 +1396,10 @@ int main(int argc, char* argv[]) {
     if (reader->GetFileType() != HDFCCS and 
         reader->GetFileType() != HDFBase and
         reader->GetFileType() != HDFPulse and
+        reader->GetFileType() != BAM and
         params.concordant) {
         cerr << "WARNING! Option concordant is only enabled when "
-             << "input reads are in PacBio base h5 or pulse h5 format." << endl;
+             << "input reads are in PacBio bax/pls.h5 or bam format." << endl;
         params.concordant = false;
     }
 
