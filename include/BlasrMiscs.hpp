@@ -80,6 +80,10 @@ void MakeSubreadRC(SMRTSequence & subreadSequenceRC,
                    SMRTSequence & subreadSequence,
                    SMRTSequence & smrtRead);
 
+// Make a virtual SMRTSequence (polymerase reads) given all subreads.
+// NO QVs will be copied at this point.
+void MakeVirtualRead(SMRTSequence & smrtRead, 
+                     const vector<SMRTSequence> & subreads);
 
 //-------------------------MISC-----------------------------------//
 int CountZero(unsigned char *ptr, int length);
