@@ -71,6 +71,45 @@ const string GetVersion(void) {
   return version;
 }
 
+/// Checks whether a smrtRead meets the following criteria
+/// (1) is within the search holeNumber range specified by params.holeNumberRanges.
+/// (2) its length greater than params.maxReadlength
+/// (3) its read score (rq) is greater than params.minRawSubreadScore
+/// (4) its qual is greater than params.minAvgQual.
+/// Change stop to false if
+/// HoleNumber of the smrtRead is greater than the search holeNumber range.
+bool IsGoodRead(const SMRTSequence & smrtRead,
+                MappingParameters & params,
+                bool & stop)
+{
+    if (params.holeNumberRangesStr.size() > 0 and
+        not params.holeNumberRanges.contains(smrtRead.HoleNumber())) {
+        // Stop processing once the specified zmw hole number is reached.
+        // Eventually this will change to just seek to hole number, and
+        // just align one read anyway.
+        if (smrtRead.HoleNumber() > params.holeNumberRanges.max()){
+            stop = true;
+            return false;
+        }
+        return false;
+    }
+    // 
+    // Discard reads that are too small, or not labeled as having any
+    // useable/good sequence. 
+    //
+    if (smrtRead.highQualityRegionScore < params.minRawSubreadScore or 
+        (params.maxReadLength != 0 and smrtRead.length > UInt(params.maxReadLength)) or
+        (smrtRead.length < params.minReadLength)) {
+        return false;
+    }
+
+    if (smrtRead.qual.Empty() != false and smrtRead.GetAverageQuality() < params.minAvgQual) {
+        return false;
+    }
+    return true;
+}
+
+
 /// Scan the next read from input.  This may either be a CCS read,
 /// or regular read (though this may be aligned in whole, or by
 /// subread).
@@ -121,6 +160,7 @@ bool FetchReads(ReaderAgglomerate * reader,
         }
     }
 
+    if (not IsGoodRead(smrtRead, params, stop) or stop) return false;
     //
     // Only normal (non-CCS) reads should be masked.  Since CCS reads store the raw read, that is masked.
     //
@@ -146,55 +186,7 @@ bool FetchReads(ReaderAgglomerate * reader,
         smrtRead.lowQualityPrefix = 0;
         smrtRead.lowQualitySuffix = 0;
     }
-
-    //
-    // Give the opportunity to align a subset of reads.
-    //
-    if (readHasGoodRegion == false or 
-        (params.holeNumberRangesStr.size() > 0 and
-         not params.holeNumberRanges.contains(smrtRead.zmwData.holeNumber))) {
-        //
-        // Nothing to do with this read. Skip aligning it entirely.
-        //
-        if (readIsCCS) {
-            ccsRead.Free();
-        }
-        smrtRead.Free();
-        // Stop processing once the specified zmw hole number is reached.
-        // Eventually this will change to just seek to hole number, and
-        // just align one read anyway.
-        if (params.holeNumberRangesStr.size() > 0 and 
-            smrtRead.zmwData.holeNumber > params.holeNumberRanges.max()){
-            stop = true;
-            return false;
-        }
-        return false;
-    }
-
-
-    // 
-    // Discard reads that are too small, or not labeled as having any
-    // useable/good sequence. 
-    //
-    if (smrtRead.length < UInt(params.minReadLength) or readHasGoodRegion == false or 
-            smrtRead.highQualityRegionScore < params.minRawSubreadScore or 
-            (params.maxReadLength != 0 and 
-             smrtRead.length > UInt(params.maxReadLength))) {
-        if (readIsCCS) {
-            ccsRead.Free();
-        }
-        smrtRead.Free();
-        return false;
-    }
-
-    if (smrtRead.qual.Empty() == false and smrtRead.GetAverageQuality() < params.minAvgQual) {
-        if (readIsCCS) {
-            ccsRead.Free();
-        }
-        smrtRead.Free();
-        return false;
-    }
-    return true;
+    return readHasGoodRegion;
 }
 
 void MapReadsNonCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData,
