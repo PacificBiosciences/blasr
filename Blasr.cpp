@@ -109,6 +109,88 @@ bool IsGoodRead(const SMRTSequence & smrtRead,
     return true;
 }
 
+// Make primary intervals (which are intervals of subreads to align
+// in the first round) from none BAM file using region table.
+void MakePrimaryIntervals(RegionTable * regionTablePtr,
+                          SMRTSequence & smrtRead,
+                          vector<ReadInterval> & subreadIntervals,
+                          vector<int> & subreadDirections,
+                          int & bestSubreadIndex,
+                          MappingParameters & params)
+{
+    vector<ReadInterval> adapterIntervals; 
+    //
+    // Determine endpoints of this subread in the main read.
+    //
+    if (params.useRegionTable == false) {
+        //
+        // When there is no region table, the subread is the entire
+        // read.
+        //
+        ReadInterval wholeRead(0, smrtRead.length);
+        // The set of subread intervals is just the entire read.
+        subreadIntervals.push_back(wholeRead);
+    }
+    else {
+        // 
+        // Grab the subread & adapter intervals from the entire region table to
+        // iterate over.
+        //
+        assert(regionTablePtr->HasHoleNumber(smrtRead.HoleNumber())); 
+        subreadIntervals = (*regionTablePtr)[smrtRead.HoleNumber()].SubreadIntervals(smrtRead.length, params.byAdapter);
+        adapterIntervals = (*regionTablePtr)[smrtRead.HoleNumber()].AdapterIntervals();
+    }
+
+    // The assumption is that neighboring subreads must have the opposite 
+    // directions. So create directions for subread intervals with
+    // interleaved 0s and 1s.
+    CreateDirections(subreadDirections, subreadIntervals.size());
+
+    //
+    // Trim the boundaries of subread intervals so that only high quality
+    // regions are included in the intervals, not N's. Remove intervals
+    // and their corresponding dirctions, if they are shorter than the 
+    // user specified minimum read length or do not intersect with hq 
+    // region at all. Finally, return index of the (left-most) longest
+    // subread in the updated vector.
+    //
+    int longestSubreadIndex = GetHighQualitySubreadsIntervals(
+            subreadIntervals, // a vector of subread intervals.
+            subreadDirections, // a vector of subread directions.
+            smrtRead.lowQualityPrefix, // hq region start pos.
+            smrtRead.length - smrtRead.lowQualitySuffix, // hq end pos.
+            params.minSubreadLength); // minimum read length.
+
+    bestSubreadIndex = longestSubreadIndex;
+    if (params.concordantTemplate == "longestsubread") {
+        // Use the (left-most) longest full-pass subread as 
+        // template for concordant mapping
+        int longestFullSubreadIndex = GetLongestFullSubreadIndex(
+                subreadIntervals, adapterIntervals);
+        if (longestFullSubreadIndex >= 0) {
+            bestSubreadIndex = longestFullSubreadIndex;
+        }
+    } else if (params.concordantTemplate == "typicalsubread") {
+        // Use the 'typical' full-pass subread as template for
+        // concordant mapping.
+        int typicalFullSubreadIndex = GetTypicalFullSubreadIndex(
+                subreadIntervals, adapterIntervals);
+        if (typicalFullSubreadIndex >= 0) {
+            bestSubreadIndex = typicalFullSubreadIndex;
+        }
+    } else if (params.concordantTemplate == "mediansubread") {
+        // Use the 'median-length' full-pass subread as template for
+        // concordant mapping.
+        int medianFullSubreadIndex = GetMedianLengthFullSubreadIndex(
+                subreadIntervals, adapterIntervals);
+        if (medianFullSubreadIndex >= 0) {
+            bestSubreadIndex = medianFullSubreadIndex;
+        }
+    } else {
+        assert(false);
+    }
+}
+
 
 /// Scan the next read from input.  This may either be a CCS read,
 /// or regular read (though this may be aligned in whole, or by
@@ -234,78 +316,11 @@ void MapReadsNonCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapDa
     
     vector<ReadInterval> subreadIntervals;
     vector<int>          subreadDirections;
-    vector<ReadInterval> adapterIntervals; 
-    //
-    // Determine endpoints of this subread in the main read.
-    //
-    if (params.useRegionTable == false) {
-        //
-        // When there is no region table, the subread is the entire
-        // read.
-        //
-        ReadInterval wholeRead(0, smrtRead.length);
-        // The set of subread intervals is just the entire read.
-        subreadIntervals.push_back(wholeRead);
-    }
-    else {
-        // 
-        // Grab the subread & adapter intervals from the entire region table to
-        // iterate over.
-        //
-        assert(mapData->regionTablePtr->HasHoleNumber(smrtRead.HoleNumber())); 
-        subreadIntervals = (*(mapData->regionTablePtr))[smrtRead.HoleNumber()].SubreadIntervals(smrtRead.length, params.byAdapter);
-        adapterIntervals = (*(mapData->regionTablePtr))[smrtRead.HoleNumber()].AdapterIntervals();
-    }
-
-    // The assumption is that neighboring subreads must have the opposite 
-    // directions. So create directions for subread intervals with
-    // interleaved 0s and 1s.
-    CreateDirections(subreadDirections, subreadIntervals.size());
-
-    //
-    // Trim the boundaries of subread intervals so that only high quality
-    // regions are included in the intervals, not N's. Remove intervals
-    // and their corresponding dirctions, if they are shorter than the 
-    // user specified minimum read length or do not intersect with hq 
-    // region at all. Finally, return index of the (left-most) longest
-    // subread in the updated vector.
-    //
-    int longestSubreadIndex = GetHighQualitySubreadsIntervals(
-            subreadIntervals, // a vector of subread intervals.
-            subreadDirections, // a vector of subread directions.
-            smrtRead.lowQualityPrefix, // hq region start pos.
-            smrtRead.length - smrtRead.lowQualitySuffix, // hq end pos.
-            params.minSubreadLength); // minimum read length.
-
-    int bestSubreadIndex = longestSubreadIndex;
-    if (params.concordantTemplate == "longestsubread") {
-        // Use the (left-most) longest full-pass subread as 
-        // template for concordant mapping
-        int longestFullSubreadIndex = GetLongestFullSubreadIndex(
-                subreadIntervals, adapterIntervals);
-        if (longestFullSubreadIndex >= 0) {
-            bestSubreadIndex = longestFullSubreadIndex;
-        }
-    } else if (params.concordantTemplate == "typicalsubread") {
-        // Use the 'typical' full-pass subread as template for
-        // concordant mapping.
-        int typicalFullSubreadIndex = GetTypicalFullSubreadIndex(
-                subreadIntervals, adapterIntervals);
-        if (typicalFullSubreadIndex >= 0) {
-            bestSubreadIndex = typicalFullSubreadIndex;
-        }
-    } else if (params.concordantTemplate == "mediansubread") {
-        // Use the 'median-length' full-pass subread as template for
-        // concordant mapping.
-        int medianFullSubreadIndex = GetMedianLengthFullSubreadIndex(
-                subreadIntervals, adapterIntervals);
-        if (medianFullSubreadIndex >= 0) {
-            bestSubreadIndex = medianFullSubreadIndex;
-        }
-    } else {
-        assert(false);
-    }
-
+    int bestSubreadIndex;
+    MakePrimaryIntervals(mapData->regionTablePtr, smrtRead,
+                         subreadIntervals, subreadDirections,
+                         bestSubreadIndex, params);
+ 
     // Flop all directions if direction of the longest subread is 1.
     if (bestSubreadIndex >= 0 and 
         bestSubreadIndex < int(subreadDirections.size()) and
