@@ -130,63 +130,81 @@ bool FetchReads(ReaderAgglomerate * reader,
                 RegionTable * regionTablePtr,
                 SMRTSequence & smrtRead, 
                 CCSSequence & ccsRead,  
+                vector<SMRTSequence> & subreads,
                 MappingParameters & params,
                 bool & readIsCCS,
                 std::string & readGroupId,
                 int & associatedRandInt,
                 bool & stop) 
 {
-    if (reader->GetFileType() == HDFCCS ||
-        reader->GetFileType() == HDFCCSONLY) { 
-        if (GetNextReadThroughSemaphore(*reader, params, ccsRead, readGroupId, associatedRandInt, semaphores) == false) {
-            stop = true;
-            return false;
+    if (reader->GetFileType() != BAM or not params.concordant) {
+        if (reader->GetFileType() == HDFCCS ||
+            reader->GetFileType() == HDFCCSONLY) { 
+            if (GetNextReadThroughSemaphore(*reader, params, ccsRead, readGroupId, associatedRandInt, semaphores) == false) {
+                stop = true;
+                return false;
+            }
+            else {
+                readIsCCS = true;
+                smrtRead.Copy(ccsRead);
+                ccsRead.SetQVScale(params.qvScaleType);
+                smrtRead.SetQVScale(params.qvScaleType);
+            }
+            assert(ccsRead.zmwData.holeNumber == smrtRead.zmwData.holeNumber and
+                   ccsRead.zmwData.holeNumber == ccsRead.unrolledRead.zmwData.holeNumber);
+        } else {
+            if (GetNextReadThroughSemaphore(*reader, params, smrtRead, readGroupId, associatedRandInt, semaphores) == false) {
+                stop = true;
+                return false;
+            }
+            else {
+                smrtRead.SetQVScale(params.qvScaleType);
+            }
         }
-        else {
-            readIsCCS = true;
-            smrtRead.Copy(ccsRead);
-            ccsRead.SetQVScale(params.qvScaleType);
-            smrtRead.SetQVScale(params.qvScaleType);
-        }
-        assert(ccsRead.zmwData.holeNumber == smrtRead.zmwData.holeNumber and
-               ccsRead.zmwData.holeNumber == ccsRead.unrolledRead.zmwData.holeNumber);
-    } else {
-        if (GetNextReadThroughSemaphore(*reader, params, smrtRead, readGroupId, associatedRandInt, semaphores) == false) {
-            stop = true;
-            return false;
-        }
-        else {
-            smrtRead.SetQVScale(params.qvScaleType);
-        }
-    }
 
-    if (not IsGoodRead(smrtRead, params, stop) or stop) return false;
-    //
-    // Only normal (non-CCS) reads should be masked.  Since CCS reads store the raw read, that is masked.
-    //
-    bool readHasGoodRegion = true;
-    if (params.useRegionTable and params.useHQRegionTable) {
-        if (readIsCCS) {
-            readHasGoodRegion = MaskRead(ccsRead.unrolledRead, ccsRead.unrolledRead.zmwData, *regionTablePtr);
+        if (not IsGoodRead(smrtRead, params, stop) or stop) return false;
+        //
+        // Only normal (non-CCS) reads should be masked.  Since CCS reads store the raw read, that is masked.
+        //
+        bool readHasGoodRegion = true;
+        if (params.useRegionTable and params.useHQRegionTable) {
+            if (readIsCCS) {
+                readHasGoodRegion = MaskRead(ccsRead.unrolledRead, ccsRead.unrolledRead.zmwData, *regionTablePtr);
+            }
+            else {
+                readHasGoodRegion = MaskRead(smrtRead, smrtRead.zmwData, *regionTablePtr);
+            }
+            //
+            // Store the high quality start and end of this read for masking purposes when printing.
+            //
+            int hqStart, hqEnd;
+            int score;
+            LookupHQRegion(smrtRead.zmwData.holeNumber, *regionTablePtr, hqStart, hqEnd, score);
+            smrtRead.lowQualityPrefix = hqStart;
+            smrtRead.lowQualitySuffix = smrtRead.length - hqEnd;
+            smrtRead.highQualityRegionScore = score;
         }
         else {
-            readHasGoodRegion = MaskRead(smrtRead, smrtRead.zmwData, *regionTablePtr);
+            smrtRead.lowQualityPrefix = 0;
+            smrtRead.lowQualitySuffix = 0;
         }
-        //
-        // Store the high quality start and end of this read for masking purposes when printing.
-        //
-        int hqStart, hqEnd;
-        int score;
-        LookupHQRegion(smrtRead.zmwData.holeNumber, *regionTablePtr, hqStart, hqEnd, score);
-        smrtRead.lowQualityPrefix = hqStart;
-        smrtRead.lowQualitySuffix = smrtRead.length - hqEnd;
-        smrtRead.highQualityRegionScore = score;
+        return readHasGoodRegion;
+    } else {
+        subreads.clear();
+        vector<SMRTSequence> reads;
+        if (GetNextReadThroughSemaphore(*reader, params, reads, readGroupId, associatedRandInt, semaphores) == false) {
+            stop = true;
+            return false;
+        }
+        assert(reads.size() != 0); //  GetNextReadThroughSemaphor should have returned false
+
+        for (const SMRTSequence & smrtRead: reads) {
+            if (IsGoodRead(smrtRead, params, stop)) {
+                subreads.push_back(smrtRead);
+            }
+        }
+        return true;
     }
-    else {
-        smrtRead.lowQualityPrefix = 0;
-        smrtRead.lowQualitySuffix = 0;
-    }
-    return readHasGoodRegion;
 }
 
 void MapReadsNonCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData,
@@ -728,8 +746,9 @@ void MapReads(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapData)
         // Associate each sequence to read in with a determined random int.
         int associatedRandInt = 0;
         bool stop = false;
+        vector<SMRTSequence> subreads;
         bool readsOK = FetchReads(mapData->reader, mapData->regionTablePtr,
-                                  smrtRead, ccsRead,
+                                  smrtRead, ccsRead, subreads,
                                   params, readIsCCS, 
                                   alignmentContext.readGroupId,
                                   associatedRandInt, stop);
