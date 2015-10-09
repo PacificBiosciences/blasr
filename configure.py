@@ -12,8 +12,8 @@ import warnings
 
 #DEFAULTCXXFLAG := -O3
 #DEBUGCXXFLAG := -g -ggdb -fno-inline
-#PROFILECXXFLAG := -Os -pg 
-#GCXXFLAG := -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -fno-omit-frame-pointer 
+#PROFILECXXFLAG := -Os -pg
+#GCXXFLAG := -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -fno-omit-frame-pointer
 
 ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -93,6 +93,7 @@ def compose_defines_pacbio(envin):
     #setifenvf(env, envin, 'PREBUILT', get_PREBUILT)
     nondefaults = set([
             'CXX',
+            'BLASR_INC',
             'LIBPBDATA_INC', 'LIBPBDATA_LIB', 'LIBPBDATA_LIBFLAGS',
             'LIBPBIHDF_INC', 'LIBPBIHDF_LIB', 'LIBPBIHDF_LIBFLAGS',
             'LIBBLASR_INC', 'LIBBLASR_LIB', 'LIBBLASR_LIBFLAGS',
@@ -139,6 +140,7 @@ def update_defaults_for_os(env):
 
 def set_defs_defaults(env, nopbbam, with_szlib):
     defaults = {
+        'BLASR_INC': os.path.join(ROOT, 'include'),
         'LIBBLASR_INC':  os.path.join(ROOT, 'libcpp', 'alignment'),
         'LIBPBDATA_INC':  os.path.join(ROOT, 'libcpp', 'pbdata'),
         'LIBPBIHDF_INC':  os.path.join(ROOT, 'libcpp', 'hdf'),

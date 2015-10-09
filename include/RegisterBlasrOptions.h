@@ -58,7 +58,6 @@ void RegisterBlasrOptions(CommandLineParser & clp, MappingParameters & params) {
     clp.RegisterFlagOption("useGuidedAlign", (bool*)&trashbinBool, "");
     clp.RegisterFlagOption("noUseGuidedAlign", (bool*)&params.useGuidedAlign, "");
     clp.RegisterFlagOption("header", (bool*)&params.printHeader, "");
-    clp.RegisterIntOption("subreadImplType", &params.subreadMapType, "", CommandLineParser::PositiveInteger);
     clp.RegisterIntOption("bandSize", &params.bandSize, "", CommandLineParser::PositiveInteger);  
     clp.RegisterIntOption("extendBandSize", &params.extendBandSize, "", CommandLineParser::PositiveInteger);  
     clp.RegisterIntOption("guidedAlignBandSize", &params.guidedAlignBandSize, "", CommandLineParser::PositiveInteger);  
@@ -133,7 +132,6 @@ void RegisterBlasrOptions(CommandLineParser & clp, MappingParameters & params) {
     // that directions of subreads can not be inferred accurately.
     clp.RegisterFlagOption("concordantAlignBothDirections", &params.concordantAlignBothDirections, "");
     clp.RegisterIntOption("flankSize", &params.flankSize, "", CommandLineParser::NonNegativeInteger);
-    clp.RegisterIntOption("subreadMapType", &params.subreadMapType, "", CommandLineParser::NonNegativeInteger);
     clp.RegisterStringOption("titleTable", &params.titleTableName, "");
     clp.RegisterFlagOption("useSensitiveSearch", &params.doSensitiveSearch, "");
     clp.RegisterFlagOption("ignoreRegions", &params.useRegionTable, "");
@@ -151,11 +149,9 @@ void RegisterBlasrOptions(CommandLineParser & clp, MappingParameters & params) {
     clp.RegisterFlagOption("h", &params.printVerboseHelp, "");
     clp.RegisterFlagOption("help", &params.printDiscussion, "");
     clp.RegisterFloatOption("accuracyPrior",    &params.readAccuracyPrior, "", CommandLineParser::NonNegativeFloat);
-    clp.RegisterIntOption("readIndex", &params.readIndex, "", CommandLineParser::NonNegativeInteger);
     // holeNumberRangesStr is a string of comma-delimited hole number ranges, such as '1,2,3,10-15'.
     // Blasr only analyzes reads whose hole numbers are in the specified hole number ranges. 
     clp.RegisterStringOption("holeNumbers", &params.holeNumberRangesStr, "");
-    clp.RegisterIntOption("maxReadIndex", &params.maxReadIndex, "", CommandLineParser::NonNegativeInteger);
     clp.RegisterIntOption("substitutionPrior",  &params.substitutionPrior, "", CommandLineParser::NonNegativeInteger);
     clp.RegisterIntOption("deletionPrior",  &params.globalDeletionPrior, "", CommandLineParser::NonNegativeInteger);
     clp.RegisterIntOption("recurseOver", &params.recurseOver, "", CommandLineParser::NonNegativeInteger);

@@ -107,7 +107,6 @@ int main(int argc, char* argv[]) {
         if (trimByRegion or maskByRegion or splitSubreads) {
             hdfRegionReader.Initialize(regionFileNames[pls2rgn[plsFileIndex]]);
             hdfRegionReader.ReadTable(regionTable);
-            regionTable.SortTableByHoleNumber();
         }
 
         ReaderAgglomerate reader;
@@ -174,49 +173,52 @@ int main(int argc, char* argv[]) {
                 continue;
             }	
 
-      //
-      // Determine the high quality boundaries of the read.  This is
-      // the full read is no hq regions exist, or it is stated to
-      // ignore regions.
-      //
-      DNALength hqReadStart, hqReadEnd;
-      int hqRegionScore;
-      if (GetReadTrimCoordinates(seq, seq.zmwData, regionTable, hqReadStart, hqReadEnd, hqRegionScore) == false or 
-          (trimByRegion == false and maskByRegion == false)) {
-        hqReadStart = 0;
-        hqReadEnd   = seq.length;
-      }
-      
-      //
-      // Mask off the low quality portions of the reads.
-      //
-			if (maskByRegion) {
-        if (hqReadStart > 0) {
-          fill(&seq.seq[0], &seq.seq[hqReadStart], 'N');
-        }
-        if (hqReadEnd != seq.length) {
-          fill(&seq.seq[hqReadEnd], &seq.seq[seq.length], 'N');
-        }
-			}
-      
+            //
+            // Determine the high quality boundaries of the read.  This is
+            // the full read is no hq regions exist, or it is stated to
+            // ignore regions.
+            //
+            DNALength hqReadStart, hqReadEnd;
+            int hqRegionScore;
+            if (GetReadTrimCoordinates(seq, seq.zmwData, regionTable, hqReadStart, hqReadEnd, hqRegionScore) == false or 
+                    (trimByRegion == false and maskByRegion == false)) {
+                hqReadStart = 0;
+                hqReadEnd   = seq.length;
+            }
+
+            //
+            // Mask off the low quality portions of the reads.
+            //
+            if (maskByRegion) {
+                if (hqReadStart > 0) {
+                    fill(&seq.seq[0], &seq.seq[hqReadStart], 'N');
+                }
+                if (hqReadEnd != seq.length) {
+                    fill(&seq.seq[hqReadEnd], &seq.seq[seq.length], 'N');
+                }
+            }
 
 
-      //
-      // Now possibly print the full read with masking.  This could be handled by making a 
-      // 
-			if (splitSubreads == false) {
-        ReadInterval wholeRead(0, seq.length);
-        // The set of subread intervals is just the entire read.
-        subreadIntervals.clear();
-        subreadIntervals.push_back(wholeRead);
-			}
-			else {
-				//
-				// Print subread coordinates no matter whether or not reads have subreads.
-				//
-				subreadIntervals.clear(); // clear old, new intervals are appended.
-				CollectSubreadIntervals(seq, &regionTable, subreadIntervals);
-      }
+
+            //
+            // Now possibly print the full read with masking.  This could be handled by making a 
+            // 
+            if (splitSubreads == false) {
+                ReadInterval wholeRead(0, seq.length);
+                // The set of subread intervals is just the entire read.
+                subreadIntervals.clear();
+                subreadIntervals.push_back(wholeRead);
+            }
+            else {
+                //
+                // Print subread coordinates no matter whether or not reads have subreads.
+                //
+                if (regionTable.HasHoleNumber(seq.HoleNumber())) {
+                    subreadIntervals = regionTable[seq.HoleNumber()].SubreadIntervals(seq.length, false, true);
+                } else {
+                    subreadIntervals = {};
+                }
+            }
       //
       // Output all subreads as separate sequences.
       //
@@ -229,20 +231,20 @@ int main(int argc, char* argv[]) {
       for (intvIndex = 0; intvIndex < subreadIntervals.size(); intvIndex++) {
         SMRTSequence subreadSequence, subreadSequenceRC;
 					
-        subreadSequence.subreadStart = subreadIntervals[intvIndex].start;
-        subreadSequence.subreadEnd   = subreadIntervals[intvIndex].end;
+        subreadSequence.SubreadStart(subreadIntervals[intvIndex].start);
+        subreadSequence.SubreadEnd  (subreadIntervals[intvIndex].end);
           
         // 
         // When trimming by region, only output the parts of the
         // subread that overlap the hq region.
         //
         if (trimByRegion == true) {
-          subreadSequence.subreadStart = max((DNALength) subreadIntervals[intvIndex].start, hqReadStart);
-          subreadSequence.subreadEnd   = min((DNALength) subreadIntervals[intvIndex].end, hqReadEnd);
+          subreadSequence.SubreadStart(max((DNALength) subreadIntervals[intvIndex].start, hqReadStart));
+          subreadSequence.SubreadEnd  ( min((DNALength) subreadIntervals[intvIndex].end, hqReadEnd));
         }
 
-        if (subreadSequence.subreadStart >= subreadSequence.subreadEnd or 
-            subreadSequence.subreadEnd - subreadSequence.subreadStart <= minSubreadLength) {
+        if (subreadSequence.SubreadStart() >= subreadSequence.SubreadEnd() or 
+            subreadSequence.SubreadEnd() - subreadSequence.SubreadStart() <= minSubreadLength) {
           //
           // There is no high qualty portion of this subread. Skip it.
           //
@@ -256,8 +258,8 @@ int main(int argc, char* argv[]) {
         //
         // Print the subread, adding the coordinates as part of the title.
         //
-        subreadSequence.ReferenceSubstring(seq, subreadSequence.subreadStart, 
-                                           subreadSequence.subreadEnd - subreadSequence.subreadStart);
+        subreadSequence.ReferenceSubstring(seq, subreadSequence.SubreadStart(), 
+                                           subreadSequence.SubreadLength());
         stringstream titleStream;
         titleStream << seq.title;
         if (splitSubreads) {
@@ -265,8 +267,8 @@ int main(int argc, char* argv[]) {
           // Add the subread coordinates if splitting on subread.
           //
           titleStream << "/" 
-                      << subreadSequence.subreadStart
-                      << "_" << subreadSequence.subreadEnd;
+                      << subreadSequence.SubreadStart()
+                      << "_" << subreadSequence.SubreadEnd();
         }
           
         // 

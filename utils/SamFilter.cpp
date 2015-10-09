@@ -46,7 +46,7 @@
 #include "datastructures/alignment/SAMToAlignmentCandidateAdapter.hpp"
 #include "GFFFile.hpp"
 #include "defs.h"
-#include "../RegisterFilterOptions.h"
+#include "RegisterFilterOptions.h"
 
 //#define USE_GOOGLE_PROFILER
 #ifdef USE_GOOGLE_PROFILER

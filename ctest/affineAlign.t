@@ -3,7 +3,7 @@ Set up
 
 Test affineAlign
   $ rm -rf $OUTDIR/affineAlign.m0
-  $ $EXEC $DATDIR/affineAlign.fofn $DATDIR/substr_with_ins.fasta -m 0 -out $OUTDIR/affineAlign.m0  -affineAlign  -readIndex 493 -insertion 100 -deletion 100
+  $ $EXEC $DATDIR/affineAlign.fofn $DATDIR/substr_with_ins.fasta -m 0 -out $OUTDIR/affineAlign.m0  -affineAlign  -holeNumbers 493 -insertion 100 -deletion 100
   [INFO]* (glob)
   [INFO]* (glob)
   $ diff $OUTDIR/affineAlign.m0 $STDDIR/affineAlign_2014_06_10.m0

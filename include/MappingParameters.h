@@ -41,7 +41,6 @@ public:
     int argi;
     int nProc;
     int globalChainType;
-    int readIndex;
     SAMOutput::Clipping clipping;
     string clippingString;
     QVScale qvScaleType;
@@ -154,7 +153,6 @@ public:
     bool useCcsOnly;
     bool detailedSDPAlignment, nouseDetailedSDPAlignment;
     int  chunkSize;
-    int  subreadMapType;
     int  sdpFilterType;
     bool useGuidedAlign;
     int  guidedAlignBandSize;
@@ -175,7 +173,6 @@ public:
     int   substitutionPrior;
     int   globalDeletionPrior;
     bool  outputByThread;
-    int   maxReadIndex;
     int   recurseOver;
     bool  forPicard;
     bool  separateGaps;
@@ -206,8 +203,6 @@ public:
     bool enableHiddenPaths;
 
     void Init() {
-        readIndex = -1;
-        maxReadIndex = -1;
         qvMatchWeight = 1.0;
         qvMismatchWeight = 1.0;
         qvInsWeight = 1.0;
@@ -325,7 +320,6 @@ public:
         printSubreadTitle = true;
         detailedSDPAlignment = true;
         nouseDetailedSDPAlignment = false;
-        subreadMapType = 0;
         useCcs     = false;
         useCcsOnly = false;
         useAllSubreadsInCcs = false;
@@ -528,10 +522,6 @@ public:
             exit(1);
         }
 
-        if (subreadMapType < 0 or subreadMapType > 1) {
-            cout << "Error, subreadImplType must be 0 or 1" << endl;
-            exit(1);
-        }
 
         if (emulateNucmer) {
             SetEmulateNucmer();
