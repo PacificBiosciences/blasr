@@ -416,11 +416,6 @@ public:
             }
         }
 
-#ifdef __APPLE__
-        nProc = 1;
-        cerr << "WARNING, multi-threading is not yet supported on Apple iOS." << endl;
-#endif
-
         // -useQuality can not be used in combination with a fasta input
         if (!ignoreQualities) {
             if (queryFileType == Fasta) {
