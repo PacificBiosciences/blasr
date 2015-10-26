@@ -53,8 +53,13 @@ void MakeVirtualRead(SMRTSequence & smrtRead,
 void MakeSubreadIntervals(vector<SMRTSequence> & subreads,
                           vector<ReadInterval> & subreadIntervals);
 
-// Get index of median length interval
-int GetIndexOfMedian(const vector<ReadInterval> & subreadIntervals);
+// Return index of subread which will be used as concordant template.
+// If Zmw has exactly one subread, return index of the subread (i.e., 0).
+// If Zmw has exactly two subreads, return index of the longer subread.
+// If Zmw has three or more subreads, return index of the median-length
+// subread in range subreadIntervals[1:-1]. Avoid using the first and last 
+// subreads (which are less likely to be full-pass) if possible.
+int GetIndexOfConcordantTemplate(const vector<ReadInterval> & subreadIntervals);
 
 //-------------------------MISC-----------------------------------//
 int CountZero(unsigned char *ptr, int length);

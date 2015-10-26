@@ -150,9 +150,11 @@ void MakeVirtualRead(SMRTSequence & smrtRead,
     }
     smrtRead.Free();
     smrtRead.Allocate(hqEnd);
+    memset(smrtRead.seq, 'N', sizeof(char) * hqEnd);
     smrtRead.lowQualityPrefix = hqStart;
     smrtRead.lowQualitySuffix = smrtRead.length - hqEnd;
     smrtRead.highQualityRegionScore = subreads[0].highQualityRegionScore;
+    smrtRead.HoleNumber(subreads[0].HoleNumber());
     stringstream ss;
     ss << SMRTTitle(subreads[0].GetTitle()).MovieName() << "/" << subreads[0].HoleNumber();
     smrtRead.CopyTitle(ss.str());
@@ -172,18 +174,30 @@ void MakeSubreadIntervals(vector<SMRTSequence> & subreads,
     }
 }
 
-int GetIndexOfMedian(const vector<ReadInterval> & subreadIntervals)
+int GetIndexOfConcordantTemplate(const vector<ReadInterval> & subreadIntervals)
 {
-    vector<ReadInterval> intervals = subreadIntervals;
-    int n = int(subreadIntervals.size() / 2);
-    vector<UInt> lens;
-    lens.resize(subreadIntervals.size());
-    for (auto interval: subreadIntervals)
-        lens.push_back(interval.end - interval.start);
-    std::sort(lens.begin(), lens.end());
-    int pos = 0;
-    for (int pos = 0; pos < int(subreadIntervals.size()); pos++)
-        if (subreadIntervals[pos].end - subreadIntervals[pos].start == lens[n])
-            return pos;
-    return pos;
+    assert(subreadIntervals.size() != 0);
+    if (subreadIntervals.size() == 1) return 0; // Zmw has exactly one subread.
+    else if (subreadIntervals.size() == 2) {
+        // Zmw has two subreads, return index of the longer one.
+        const ReadInterval & first = subreadIntervals[0];
+        const ReadInterval & second = subreadIntervals[1];
+        if (first.Length() < second.Length()) return 1;
+        else return 0;
+    } else { 
+        // Zmw has more than two subreads, look for the median-length subread
+        // in subreadIntervals[1:-1].
+        vector<ReadInterval> intervals;
+        intervals.insert(intervals.begin(), subreadIntervals.begin() + 1, subreadIntervals.end() - 1);
+        std::sort(intervals.begin(), intervals.end(), 
+                  [](const ReadInterval& a, const ReadInterval& b)->bool
+                  {return a.Length() < b.Length();});
+        const ReadInterval & template_interval = intervals[int(intervals.size()/2)];
+        for (const ReadInterval & interval: subreadIntervals) {
+        for (int pos = 1; pos < subreadIntervals.size() -1; pos ++)
+            if (subreadIntervals[pos] == template_interval) {
+                return pos;
+            }
+        }
+    }
 }

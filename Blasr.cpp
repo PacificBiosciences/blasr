@@ -166,7 +166,7 @@ void MakePrimaryIntervals(vector<SMRTSequence> & subreads,
 {
     MakeSubreadIntervals(subreads, subreadIntervals);
     CreateDirections(subreadDirections, subreadIntervals.size());
-    bestSubreadIndex = GetIndexOfMedian(subreadIntervals);
+    bestSubreadIndex = GetIndexOfConcordantTemplate(subreadIntervals); 
 }
 
 
@@ -326,6 +326,11 @@ void MapReadsNonCCS(MappingData<T_SuffixArray, T_GenomeSequence, T_Tuple> *mapDa
         // Only the longest subread will be aligned in the first round.
         startIndex = max(startIndex, bestSubreadIndex);
         endIndex   = min(endIndex, bestSubreadIndex + 1);
+
+        if (params.verbosity >= 1) {
+            cout << "Concordant template subread index: " << bestSubreadIndex << ", " 
+                 << smrtRead.HoleNumber() << "/" << subreadIntervals[bestSubreadIndex] << endl;
+        }
     }
 
     //
