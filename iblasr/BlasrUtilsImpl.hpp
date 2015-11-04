@@ -968,11 +968,11 @@ void PrintAlignment(T_AlignmentCandidate &alignment,
                           alignment.qAlignedSeqPos, alignment.tAlignedSeqPos);
     }
     else if (params.printFormat == SAM) {
-      SAMOutput::PrintAlignment(alignment, fullRead, outFile, alignmentContext, params.samQVList, params.clipping, params.cigarUseSeqMatch);
+      SAMOutput::PrintAlignment(alignment, fullRead, outFile, alignmentContext, params.samQVList, params.clipping, params.cigarUseSeqMatch, params.allowAdjacentIndels);
     }
     else if (params.printFormat == BAM) {
 #ifdef USE_PBBAM
-      BAMOutput::PrintAlignment(alignment, fullRead, subread, *bamWriterPtr, alignmentContext, params.samQVList, params.clipping, params.cigarUseSeqMatch);
+      BAMOutput::PrintAlignment(alignment, fullRead, subread, *bamWriterPtr, alignmentContext, params.samQVList, params.clipping, params.cigarUseSeqMatch, params.allowAdjacentIndels);
 #else
       REQUIRE_PBBAM_ERROR();
 #endif

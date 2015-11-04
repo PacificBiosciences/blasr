@@ -38,9 +38,8 @@ void RegisterBlasrOptions(CommandLineParser & clp, MappingParameters & params) {
     clp.RegisterFlagOption("printOnlyBest", &params.printOnlyBest, "");
     clp.RegisterFlagOption("outputByThread", &params.outputByThread, "");
     clp.RegisterFlagOption("rbao", &params.refineBetweenAnchorsOnly, "");
-    clp.RegisterFlagOption("allowAdjacentIndels", &params.forPicard, "");
     clp.RegisterFlagOption("onegap", &params.separateGaps, "");
-    clp.RegisterFlagOption("allowAdjacentIndels", &params.forPicard, "");
+    clp.RegisterFlagOption("allowAdjacentIndels", &params.allowAdjacentIndels, "", false);
     clp.RegisterFlagOption("placeRepeatsRandomly", &params.placeRandomly, "");
     clp.RegisterIntOption("randomSeed", &params.randomSeed, "", CommandLineParser::Integer);
     clp.RegisterFlagOption("extend", &params.extendAlignments, "");
