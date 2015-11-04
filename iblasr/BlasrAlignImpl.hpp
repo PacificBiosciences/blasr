@@ -393,13 +393,6 @@ void MapRead(T_Sequence &read, T_Sequence &readRC, T_RefSequence &genome,
         RemoveOverlappingAlignments(alignmentPtrs, params);
     }
 
-    if (params.forPicard) {
-        int a;
-        for (a = 0; a < alignmentPtrs.size(); a++ ) {
-            alignmentPtrs[a]->OrderGapsByType();
-        }
-    }
-
     //
     // Look to see if the number of anchors found for this read match
     // what is expected given the expected distribution of number of

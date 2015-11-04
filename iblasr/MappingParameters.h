@@ -173,7 +173,7 @@ public:
     int   globalDeletionPrior;
     bool  outputByThread;
     int   recurseOver;
-    bool  forPicard;
+    bool  allowAdjacentIndels;
     bool  separateGaps;
     string scoreMatrixString;
     bool  printDotPlots;
@@ -346,7 +346,7 @@ public:
         globalDeletionPrior = 13;
         outputByThread = false;
         recurseOver = 10000;
-        forPicard = false;
+        allowAdjacentIndels = false;
         separateGaps = false;
         scoreMatrixString = "";
         printDotPlots = false;
@@ -526,7 +526,6 @@ public:
         }
         if (printSAM) {
             printFormat = SAM;
-            forPicard = true;
         }
         //
         // Parse the clipping.
@@ -554,7 +553,6 @@ public:
 #else
             cigarUseSeqMatch = true; // ALWAYS true for BAM
             printFormat = BAM;
-            forPicard = true;
             printSAM = false;
             samQVList.SetDefaultQV();
             printSAMQV = true;
