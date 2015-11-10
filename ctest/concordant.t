@@ -22,6 +22,7 @@ Test -concordant
 #2015_03_28  --> changelist 148101, 148080 updated read group id, 148100 updated TLEN
 #2015_04_09  --> changelist 148796, updated read group id
 #2015_04_25  --> changelist 149721, update CIGAR string, replace M with X=.
+#2015_04_25  --> changelist ?, force refine all concordant alignments
 
 Test -concordant FMR1 case (the 'typical subread' is selected as template for concordant mapping)
   $ FOFN=$DATDIR/FMR1_concordant.fofn
@@ -29,4 +30,4 @@ Test -concordant FMR1 case (the 'typical subread' is selected as template for co
   $ $EXEC $FOFN $REF -concordant -out $OUTDIR/FMR1_zmw_37927.m4 -m 4 -holeNumbers 37927
   [INFO]* (glob)
   [INFO]* (glob)
-  $ diff $OUTDIR/FMR1_zmw_37927.m4 $STDDIR/FMR1_zmw_37927.m4
+  $ diff $OUTDIR/FMR1_zmw_37927.m4 $STDDIR/$UPDATEDATE/FMR1_zmw_37927.m4

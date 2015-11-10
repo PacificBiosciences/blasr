@@ -1468,7 +1468,6 @@ void AlignSubreadToAlignmentTarget(ReadAlignments & allReadAlignments,
         ComputeAlignmentStats(exploded, subread.seq,
                 alignedRefSequence.seq,
                 distScoreFn2);
-        //SMRTDistanceMatrix, params.indel, params.indel);
         if (exploded.score <= params.maxScore) {
             //
             // The coordinates of the alignment should be
@@ -1505,6 +1504,13 @@ void AlignSubreadToAlignmentTarget(ReadAlignments & allReadAlignments,
             // Save this alignment for printing later.
             //
             T_AlignmentCandidate *alignmentPtr = new T_AlignmentCandidate;
+            // Refine alignments
+            if (params.refineAlignments) {
+                vector<SMRTSequence*> vquery;
+                vquery.push_back(&unrolledRead);
+                RefineAlignment(vquery, alignedRefSequence, exploded, params, mappingBuffers);
+            }
+
             *alignmentPtr = exploded;
             allReadAlignments.AddAlignmentForSeq(subreadIndex, alignmentPtr);
         } // End of exploded score <= maxScore.

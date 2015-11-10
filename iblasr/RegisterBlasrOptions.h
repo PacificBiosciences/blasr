@@ -54,7 +54,6 @@ void RegisterBlasrOptions(CommandLineParser & clp, MappingParameters & params) {
     clp.RegisterFlagOption("samplePaths", (bool*) &params.samplePaths, "");
     clp.RegisterFlagOption("noStoreMapQV", &params.storeMapQV, "");
     clp.RegisterFlagOption("nowarp", (bool*) &params.nowarp, "");
-    clp.RegisterFlagOption("noRefineAlign", (bool*) &params.refineAlign, "");
     clp.RegisterFlagOption("guidedAlign", (bool*)&params.useGuidedAlign, "");
     clp.RegisterFlagOption("useGuidedAlign", (bool*)&trashbinBool, "");
     clp.RegisterFlagOption("noUseGuidedAlign", (bool*)&params.useGuidedAlign, "");

@@ -34,7 +34,6 @@ public:
     int sdpTupleSize;
     int match;
     int showAlign;
-    int refineAlign;
     bool useScoreCutoff;
     int maxScore;
     int argi;
@@ -220,7 +219,6 @@ public:
         match = 0;
         mismatch = 0;
         showAlign = 1;
-        refineAlign = 1;
         useScoreCutoff = false;
         maxScore = -200;
         argi = 1;
