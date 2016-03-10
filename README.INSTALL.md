@@ -1,5 +1,7 @@
 ## Installation
 
+### See a step by step Blasr installation example on Blasr wiki page
+
 ### Download source code
 
 * To pull this project from git hub to your local system:
