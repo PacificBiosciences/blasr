@@ -1,5 +1,9 @@
 ## Installation
 
+### See a step by step Blasr installation example on Blasr wiki page
+
+        https://github.com/PacificBiosciences/blasr/wiki/Step-by-step-blasr-installation-example
+
 ### Download source code
 
 * To pull this project from git hub to your local system:
