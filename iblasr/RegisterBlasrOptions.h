@@ -428,11 +428,11 @@ const string BlasrConciseHelp(void) {
        << " usage: blasr reads genome " << endl
        << " Run with -h for a list of commands " << endl
        << "          -help for verbose discussion of how to run blasr." << endl << endl
-       << "In release v3.0.1 of BLASR, command-line options will use the " << endl
+       << "In release v3.1 of BLASR, command-line options will use the " << endl
        << "single dash/double dash convention: " << endl
        << "Character options are preceded by a single dash. (Example: -v) " << endl
        << "Word options are preceded by a double dash. (Example: --verbose) " << endl
-       << "Please modify your scripts accordingly when BLASR v3.0.1 is released. " << endl << endl;
+       << "Please modify your scripts accordingly when BLASR v3.1 is released. " << endl << endl;
     return ss.str();
 }
 
