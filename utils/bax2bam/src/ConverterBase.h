@@ -818,17 +818,7 @@ bool ConverterBase<RecordType, HdfReader>::LoadChemistryFromMetadataXML(
         sequencingKit_     = pt.get<std::string>("Metadata.SequencingKit.PartNumber");
         basecallerVersion_ = pt.get<std::string>("Metadata.InstCtrlVer");
 
-        // throws if invalid chemistry triple
-        // we'll take the opportunity to exit early with error message
-        using PacBio::BAM::ReadGroupInfo;
-        auto chemistryCheck = ReadGroupInfo::SequencingChemistryFromTriple(bindingKit_,
-                                                                           sequencingKit_,
-                                                                           basecallerVersion_);
         return true;
-    }
-    catch (PacBio::BAM::InvalidSequencingChemistryException& e) {
-        AddErrorMessage(e.what());
-        return false;
     }
     catch (...)
     { }
