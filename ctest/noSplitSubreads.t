@@ -43,7 +43,7 @@ Test blasr with --noSplitSubreads
   [INFO]* (glob)
   [INFO]* (glob)
   $ $SAMTOOLS view -h $outbam -o $outsam
-  $ grep -v '^@PG' $outsam > ${outsam}.tmp && grep -v '^@PG' $stdsam > ${stdsam}.tmp && diff ${outsam}.tmp ${stdsam}.tmp
+  $ grep -v '^@PG' $outsam > $TMP1 && grep -v '^@PG' $stdsam > $TMP2 && diff $TMP1 $TMP2
   $ grep '@RG' $outsam
   @RG\tID:e6043908* (glob)
   $ grep 'RG:Z:e6043908' $outsam |wc -l
