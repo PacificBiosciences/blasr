@@ -211,7 +211,7 @@ void RegisterBlasrOptions(CommandLineParser& clp, MappingParameters& params)
     clp.RegisterFlagOption("-scaleMapQVByNClusters", &params.scaleMapQVByNumSignificantClusters, "",
                            false);
     clp.RegisterFlagOption("-printSAMQV", &params.printSAMQV, "", false);
-    clp.RegisterFlagOption("-cigarUseSeqMatch", &params.cigarUseSeqMatch, "");
+    clp.RegisterFlagOption("-cigarUseSeqMatch", &params.cigarUseSeqMatch, "", false);
     clp.RegisterStringListOption("-samQV", &params.samQV, "");
     clp.RegisterFlagOption("-fastMaxInterval", &params.fastMaxInterval, "", false);
     clp.RegisterFlagOption("-aggressiveIntervalCut", &params.aggressiveIntervalCut, "", false);
