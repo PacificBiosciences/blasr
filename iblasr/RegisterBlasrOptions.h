@@ -702,7 +702,7 @@ const string BlasrDiscussion(void)
        << "  specified." << endl
        << "  " << endl
        << "  Although reads may be input in FASTA format, the recommended input is" << endl
-       << "  PacBio BAM files because these contain qualtiy value" << endl
+       << "  PacBio BAM files because these contain quality value" << endl
        << "  information that is used in the alignment and produces higher quality" << endl
        << "  variant detection." << endl
        << "  Although alignments can be output in various formats, the recommended " << endl
