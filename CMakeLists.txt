@@ -40,6 +40,10 @@ include_directories(
     ${BLASR_RootDir}/libcpp/pbdata
     ${HDF5_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
+    ${LIBLZMA_INCLUDE_DIRS}
+    ${BZIP2_INCLUDE_DIRS}
+    ${CURL_INCLUDE_DIRS}
+    ${CRYPTO_INCLUDE_DIRS}
     ${PacBioBAM_INCLUDE_DIRS}
     ${CMAKE_BINARY_DIR}/generated
 )
@@ -61,6 +65,10 @@ target_link_libraries(
     ${hts_LIBRARIES}
     ${ZLIB_LDFLAGS}
     ${HDF5_LDFLAGS}
+    ${LIBLZMA_LDFLAGS}
+    ${BZIP2_LDFLAGS}
+    ${CURL_LDFLAGS}
+    ${CRYPTO_LDFLAGS}
     )
 
 # Binaries

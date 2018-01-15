@@ -19,6 +19,35 @@ else()
     set(ZLIB_LDFLAGS ${ZLIB_LIBRARIES})
 endif()
 
+# LZMA
+if (NOT LIBLZMA_LIBRARIES)
+    find_package(LibLZMA REQUIRED)
+else()
+    set(LIBLZMA_LDFLAGS ${LIBLZMA_LIBRARIES})
+endif()
+
+# BZIP2
+if (NOT BZIP2_LIBRARIES)
+    find_package(BZip2 REQUIRED)
+else()
+    set(BZIP2_LDFLAGS ${BZIP2_LIBRARIES})
+endif()
+
+# CURL
+if (NOT CURL_LIBRARIES)
+    find_package(CURL)
+else()
+    set(CURL_LDFLAGS ${CURL_LIBRARIES})
+endif()
+
+# LIBCRYPTO
+if (NOT CRYPTO_INCLUDE_DIRS OR NOT CRYPTO_LIBRARIES)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(CRYPTO libcrypto REQUIRED)
+else()
+    set(CRYPTO_LDFLAGS ${CRYPTO_LIBRARIES})
+endif()
+
 # HDF5
 if (HDF5_INCLUDE_DIR)
     message(FATAL_ERROR "Please specify HDF5_INCLUDE_DIRS not HDF5_INCLUDE_DIR!")
