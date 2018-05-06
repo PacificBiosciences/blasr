@@ -35,6 +35,10 @@ Are HDF$ libraries and include folders in different locations?
     cmake -GNinja -DHDF5_LIBRARIES=/your/location/hdf-1.8.16/lib
                   -DHDF5_INCLUDE_DIRS=/other/location/hdf-1.8.16/include ..
 
+To change the location of htslib, add:
+    -DHTSLIB_INCLUDE_DIR=/path/to/htslib -DHTSLIB_LIB_DIR=/path/to/htslib
+
+
 Prefer a custom libz implementation?
 
     cmake -GNinja -DZLIB_INCLUDE_DIRS=/your/location/zlib/include \
