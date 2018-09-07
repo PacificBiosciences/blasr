@@ -6,23 +6,15 @@
 
 ***
 ## Availability
-The latest release binary can be installed via [bioconda](https://bioconda.github.io/):
+Latest version can be installed via bioconda package `blasr`.
 
-    conda install -c bioconda blasr
-
-Official support is only provided for official and stable
-[SMRT Analysis builds](http://www.pacb.com/products-and-services/analytical-software/)
-provided by PacBio and not for source builds.
-
-Unofficial support for binary releases is provided via github issues,
-not via mail to developers.
-**No** support for source builds; issues will be closed without comment.
+Please refer to our [official pbbioconda page](https://github.com/PacificBiosciences/pbbioconda)
+for information on Installation, Support, License, Copyright, and Disclaimer.
 
 ## Documentation
 
  - [Wiki: all you need to know](https://github.com/PacificBiosciences/blasr/wiki)
  - [Running BLASR](doc/EXAMPLES.md)
- - [Developer environment](doc/DEVELOPER.md)
 
 DISCLAIMER
 ----------

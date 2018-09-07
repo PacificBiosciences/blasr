@@ -32,6 +32,7 @@ blasr_fast_test_list = [
   ['holeNumbers', 'INTERMEDIATE'],
 #  ['bug25328', 'SLOW'],
 #  ['pgc-big', 'SLOW'],
+#  ['long-cigar', 'SLOW'],
 ]
 
 blasr_test_remotedir = '/pbi/dept/secondary/siv/testdata/BlasrTestData/ctest'
