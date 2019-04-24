@@ -5,7 +5,7 @@ project(
   default_options : [
     'buildtype=release',
     'warning_level=3',
-    'cpp_std=c++11',
+    'cpp_std=c++14',
     'b_ndebug=false'],
   license : 'BSD-3',
   meson_version : '>= 0.46.0')
