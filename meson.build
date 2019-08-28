@@ -5,7 +5,7 @@ project(
   default_options : [
     'buildtype=release',
     'warning_level=3',
-    'cpp_std=c++11',
+    'cpp_std=c++14',
     'b_ndebug=false'],
   license : 'BSD-3',
   meson_version : '>= 0.46.0')
@@ -57,9 +57,18 @@ blasr_pbbam_dep = dependency('pbbam', fallback : ['pbbam', 'pbbam_dep'])
 blasr_libblasr_dep = dependency('libblasr', fallback : ['blasr_libcpp', 'libblasr_dep'])
 
 # zlib
-blasr_zlib_dep = dependency('zlib', required : true)
+blasr_zlib_dep = dependency('zlib', required : true, fallback : ['zlib', 'zlib_dep'])
 
-blasr_deps = [blasr_thread_dep, blasr_boost_dep, blasr_pbbam_dep, blasr_libblasr_dep, blasr_zlib_dep]
+# htslib
+blasr_htslib_dep = dependency('htslib', required : true, version : '>=1.4', fallback : ['htslib', 'htslib_dep'])
+
+blasr_deps = [
+  blasr_thread_dep,
+  blasr_boost_dep,
+  blasr_pbbam_dep,
+  blasr_libblasr_dep,
+  blasr_zlib_dep,
+  blasr_htslib_dep]
 
 ########################
 # sources + executable #
