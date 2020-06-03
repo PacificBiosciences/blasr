@@ -14,6 +14,5 @@ build/
 /utils/bax2bam/tests/src/TestData.h
 
 # Meson WrapDB stuff
-subprojects/packagecache/
-subprojects/blasr_libcpp*
-subprojects/pbbam*
+/subprojects/*
+!/subprojects/*.wrap
