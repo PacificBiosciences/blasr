@@ -5,10 +5,10 @@ project(
   default_options : [
     'buildtype=release',
     'warning_level=3',
-    'cpp_std=c++14',
+    'cpp_std=c++17',
     'b_ndebug=false'],
   license : 'BSD-3',
-  meson_version : '>= 0.46.0')
+  meson_version : '>= 0.52.0')
 
 # TODO:
 # try to reenable 'b_ndebug=true'
@@ -48,7 +48,7 @@ endif
 blasr_thread_dep = dependency('threads', required : true)
 
 # boost
-blasr_boost_dep = dependency('boost', required : true)
+blasr_boost_dep = dependency('boost', include_type : 'system', required : true)
 
 # pbbam
 blasr_pbbam_dep = dependency('pbbam', fallback : ['pbbam', 'pbbam_dep'])
