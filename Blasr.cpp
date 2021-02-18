@@ -1459,7 +1459,7 @@ int main(int argc, char *argv[])
                 }
                 delete bamWriterPtr;
                 bamWriterPtr = NULL;
-            } catch (std::exception e) {
+            } catch (const std::exception &e) {
                 std::cout << "Error, could not flush bam records to bam file." << std::endl;
                 std::exit(EXIT_FAILURE);
             }
