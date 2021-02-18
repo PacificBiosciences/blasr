@@ -973,7 +973,7 @@ void PrintAlignment(T_AlignmentCandidate &alignment, SMRTSequence &fullRead,
                 SummaryOutput::Print(alignment, outFile);
             }
         }
-    } catch (std::ostream::failure f) {
+    } catch (const std::ostream::failure &f) {
         std::cout << "ERROR writing to output file. The output drive may be full, or you  "
                   << std::endl;
         std::cout << "may not have proper write permissions." << std::endl;
