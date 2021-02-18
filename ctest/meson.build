@@ -41,7 +41,7 @@ blasr_test_outdir = join_paths(blasr_test_testdir, 'out')
 
 foreach i : blasr_fast_test_list
   test(
-    'blasr *' + i[1] + '* cram test: "' + i[0] + '"',
+    'blasr cram test - ' + i[0],
     blasr_cram_script,
     args : [
       '--xunit-file=' + join_paths(meson.build_root(), 'blasr-cram-' + i[0] + '.xml'),
